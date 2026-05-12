@@ -5,15 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Que No Se Venza - Inventario</title>
     
-    <!-- FUENTES Y VECTORES -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,500,0,0" rel="stylesheet" />
     
-    <!-- LIBRERÍAS EXTERNAS -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     
-    <!-- FIREBASE SCRIPTS -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="firebase-config.js"></script>
@@ -112,7 +109,6 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
-    <!-- PANTALLA DE BLOQUEO POR MOROSIDAD -->
     <div class="lock-screen" id="lockScreen">
         <h2><span class="material-symbols-rounded" style="font-size:32px;">lock</span> Servicio Suspendido</h2>
         <p style="margin-bottom:20px;">Tu cuenta ha sido desactivada por falta de pago.</p>
@@ -120,7 +116,6 @@
         <button class="btn-header" style="margin-top: 25px; border:none; background:transparent; text-decoration:underline;" onclick="cerrarSesion()">Salir</button>
     </div>
 
-    <!-- MODAL SOPORTE -->
     <div class="modal-overlay" id="modalSoporte">
         <div class="modal-card">
             <button onclick="cerrarModal('modalSoporte')" class="btn-close-modal"><span class="material-symbols-rounded">close</span></button>
@@ -137,7 +132,6 @@
         </div>
     </div>
 
-    <!-- MODAL DE CLAVES -->
     <div class="modal-overlay" id="modalClave">
         <div class="modal-card">
             <button onclick="cerrarModal('modalClave')" class="btn-close-modal"><span class="material-symbols-rounded">close</span></button>
@@ -158,20 +152,18 @@
         </div>
     </div>
 
-    <!-- MODAL DE EXCEL -->
     <div class="modal-overlay" id="modalCSV">
         <div class="modal-card">
             <button onclick="cerrarModal('modalCSV')" class="btn-close-modal"><span class="material-symbols-rounded">close</span></button>
             <h2 class="modal-title"><span class="material-symbols-rounded">upload_file</span> Subir Excel</h2>
-            <button class="btn-header" style="width:100%; padding: 12px; margin-bottom: 20px; border-color: var(--info); color: var(--info);" onclick="descargarPlantillaCSV()"><span class="material-symbols-rounded">download</span> Descargar Plantilla</button>
+            <button class="btn-header" style="width:100%; padding: 12px; margin-bottom: 20px; border-color: var(--info); color: var(--info);" onclick="descargarPlantillaExcel()"><span class="material-symbols-rounded">download</span> Descargar Plantilla</button>
             <div style="text-align: left; margin-bottom: 15px; background: #F9FAFB; padding: 15px; border-radius: 12px; border: 1px solid #E5E7EB;">
-                <input type="file" id="archivoCSV" accept=".csv, .xlsx, .xls" style="width: 100%; margin-top: 10px; font-size: 13px; cursor: pointer;">
+                <input type="file" id="archivoCSV" accept=".xlsx, .xls" style="width: 100%; margin-top: 10px; font-size: 13px; cursor: pointer;">
             </div>
             <button class="btn-submit" onclick="procesarExcelMasivo()"><span class="material-symbols-rounded">cloud_upload</span> Cargar a la Nube</button>
         </div>
     </div>
 
-    <!-- MODAL DE SALIDA -->
     <div class="modal-overlay" id="modalSalida">
         <div class="modal-card">
             <button onclick="cerrarModal('modalSalida')" class="btn-close-modal"><span class="material-symbols-rounded">close</span></button>
@@ -296,24 +288,21 @@
         function cerrarSesion() { localStorage.removeItem('sesionActual'); localStorage.removeItem('rolUsuario'); window.location.href='/login.html'; }
 
         // ==========================================
-        // 2. NÚCLEO DE FIREBASE (FASE 2)
+        // 2. NÚCLEO DE FIREBASE
         // ==========================================
         let clienteActual = null; 
         let idProductoEnEdicion = null; 
         let idProductoParaSalida = null;
-        let productosGlobales = []; // Reemplaza al obtenerProductos() antiguo
+        let productosGlobales = []; 
 
-        // A. CONEXIÓN Y MIGRACIÓN INICIAL
         function verificarSesionFirebase() {
             const idSesion = localStorage.getItem('sesionActual');
             if (!idSesion) { window.location.href = '/login.html'; return; }
 
-            // 1. Escuchar al Cliente (Seguridad y Suspensión)
             db.collection('clientes').doc(String(idSesion)).onSnapshot(async (doc) => {
                 if (!doc.exists) { cerrarSesion(); return; }
                 clienteActual = doc.data();
                 
-                // Si lo suspenden, mostrar pantalla de bloqueo inmediatamente
                 if (!clienteActual.activo) {
                     document.getElementById('lockScreen').classList.add('active');
                     document.getElementById('mainApp').style.display = 'none'; 
@@ -325,15 +314,13 @@
 
                 configurarInterfazPorRol();
 
-                // 2. MIGRACIÓN FANTASMA (Solo ocurre 1 vez si hay datos locales)
                 if(!window.migracionHecha) {
                     window.migracionHecha = true;
                     await migrarInventarioLocal();
-                    iniciarListenerInventario(); // Empieza a leer la nube
+                    iniciarListenerInventario(); 
                 }
             });
 
-            // 3. Escuchar Anuncios Globales
             db.collection('sistema').doc('anuncio').onSnapshot((doc) => {
                 if(doc.exists && doc.data().texto) {
                     const b = document.getElementById('anuncioGlobal');
@@ -374,18 +361,16 @@
             }
         }
 
-        // B. LECTURA EN TIEMPO REAL
         function iniciarListenerInventario() {
             db.collection('clientes').doc(String(clienteActual.id)).collection('productos')
             .onSnapshot(snapshot => {
                 productosGlobales = [];
                 snapshot.forEach(doc => productosGlobales.push(doc.data()));
-                actualizarDatalistsNube(); // Actualiza el autocompletado en base a los productos reales
-                renderizarProductosNube(); // Dibuja la lista en pantalla
+                actualizarDatalistsNube();
+                renderizarProductosNube(); 
             });
         }
 
-        // C. ESCRITURA EN LA NUBE
         async function procesarFormulario() {
             const nombre = document.getElementById('nombreProducto').value.trim(); const marca = document.getElementById('marcaProducto').value.trim();
             const lote = document.getElementById('loteProducto').value.trim(); const proveedor = document.getElementById('proveedorProducto').value.trim();
@@ -401,10 +386,7 @@
             
             try {
                 await db.collection('clientes').doc(String(clienteActual.id)).collection('productos').doc(String(idNuevo)).set(nuevoProducto);
-                
-                // Actualiza catálogos de historial si es necesario (Opcional, el autocompletado ya lee de productosGlobales)
                 procesarAprendizaje(nombre, marca, proveedor); 
-                
                 limpiarFormularioProd(); 
                 showToast(idProductoEnEdicion ? "Actualizado en la nube." : "Guardado en la nube.");
             } catch(e) {
@@ -418,7 +400,6 @@
             const p = productosGlobales.find(x => x.id === idProductoParaSalida);
             if(p) {
                 const pSaliendo = { ...p, motivoSalida: motivo, fechaSalida: new Date().toISOString() };
-                
                 try {
                     const batch = db.batch();
                     const docProd = db.collection('clientes').doc(String(clienteActual.id)).collection('productos').doc(String(p.id));
@@ -433,48 +414,91 @@
                     cerrarModal('modalSalida'); 
                     document.getElementById('buscadorInventario').value = '';
                     showToast("Movimiento registrado en la nube.", "success");
-                } catch(e) {
-                    showToast("Error al procesar la salida.", "error");
+                } catch(e) { showToast("Error al procesar la salida.", "error"); }
+            }
+        }
+
+        // ==========================================
+        // 3. EXCEL (XLSX) CREADO CON SHEETJS
+        // ==========================================
+        function descargarPlantillaExcel() {
+            const datosPlantilla = [
+                ["Nombre del Producto (Obligatorio)", "Marca", "Lote", "Proveedor", "Fecha de Vencimiento (Obligatorio)"],
+                ["Leche Entera 1L", "Colun", "L-9981", "Distribuidora Sur", "25-12-2026"],
+                ["Queso Laminado", "Soprole", "", "", "05-01-2027"]
+            ];
+            const hoja = XLSX.utils.aoa_to_sheet(datosPlantilla);
+            hoja['!cols'] = [{wch: 35}, {wch: 20}, {wch: 15}, {wch: 25}, {wch: 35}]; 
+
+            const libro = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(libro, hoja, "Plantilla Inventario");
+            XLSX.writeFile(libro, "Plantilla_QueNoSeVenza.xlsx");
+        }
+
+        function interpretarFechaExcel(fechaExcel) {
+            if (!fechaExcel) return null;
+            if (typeof fechaExcel === 'string') {
+                const partes = fechaExcel.split(/[-/]/);
+                if (partes.length === 3) {
+                    let d = partes[0].padStart(2, '0');
+                    let m = partes[1].padStart(2, '0');
+                    let y = partes[2];
+                    if (y.length === 2) y = "20" + y;
+                    if (y.length === 4) return `${y}-${m}-${d}`;
                 }
             }
+            if (typeof fechaExcel === 'number') {
+                const fecha = new Date((fechaExcel - (25567 + 2)) * 86400 * 1000);
+                return fecha.toISOString().split('T')[0];
+            }
+            return null;
         }
 
         async function procesarExcelMasivo() {
             const input = document.getElementById('archivoCSV');
             if (!input.files || input.files.length === 0) return showToast("Selecciona un archivo.", "warning");
+            
+            const file = input.files[0];
+            if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+                return showToast("Sube un archivo Excel (.xlsx o .xls)", "error");
+            }
+
             const reader = new FileReader();
             
             reader.onload = async function(e) {
                 try {
-                    const data = new Uint8Array(e.target.result); const workbook = XLSX.read(data, {type: 'array'});
-                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1, raw: false, dateNF: 'yyyy-mm-dd'});
+                    showToast("Leyendo Excel... No cierres la ventana.", "info");
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                     
+                    const filas = XLSX.utils.sheet_to_json(worksheet, {header: 1}); 
+
                     let agregados = 0;
                     const chunks = [];
                     let currentBatch = db.batch();
                     let opCount = 0;
 
-                    showToast("Subiendo archivo a la nube...", "info");
+                    for (let i = 1; i < filas.length; i++) {
+                        const fila = filas[i]; 
+                        if (!fila || fila.length === 0 || !fila[0] || !fila[4]) continue;
 
-                    for (let i = 1; i < json.length; i++) {
-                        const fila = json[i]; if (!fila || fila.length === 0) continue;
-                        let nombre = '', marca = '', lote = '', proveedor = '', fecha = '';
-                        if (fila.length === 1 && typeof fila[0] === 'string' && fila[0].includes(';')) {
-                            const partes = fila[0].split(';'); nombre = partes[0] ? partes[0].trim() : ''; marca = partes[1] ? partes[1].trim() : ''; lote = partes[2] ? partes[2].trim() : ''; proveedor = partes[3] ? partes[3].trim() : ''; fecha = partes[4] ? partes[4].trim() : '';
-                        } else {
-                            nombre = fila[0] ? String(fila[0]).trim() : ''; marca = fila[1] ? String(fila[1]).trim() : ''; lote = fila[2] ? String(fila[2]).trim() : ''; proveedor = fila[3] ? String(fila[3]).trim() : ''; fecha = fila[4] ? String(fila[4]).trim() : '';
-                        }
-                        if(fecha && fecha.includes('/')) { const p = fecha.split('/'); if(p.length === 3 && p[2].length === 4) { fecha = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`; } }
-                        
-                        if (nombre && fecha && fecha.length >= 8 && !fecha.includes('Invalid') && limpiarBasura(nombre)) {
+                        let nombre = String(fila[0]).trim();
+                        let marca = fila[1] ? String(fila[1]).trim() : '';
+                        let lote = fila[2] ? String(fila[2]).trim() : '';
+                        let proveedor = fila[3] ? String(fila[3]).trim() : '';
+                        let fechaRaw = fila[4];
+
+                        let fechaValida = interpretarFechaExcel(fechaRaw);
+
+                        if (nombre && fechaValida && limpiarBasura(nombre)) {
                             const nuevoId = Date.now() + i;
-                            const pData = { id: nuevoId, nombre, marca, lote, proveedor, fecha };
+                            const pData = { id: nuevoId, nombre, marca, lote, proveedor, fecha: fechaValida };
                             const ref = db.collection('clientes').doc(String(clienteActual.id)).collection('productos').doc(String(nuevoId));
                             
                             currentBatch.set(ref, pData);
                             opCount++; agregados++;
                             
-                            // Límite de Firebase Batch
                             if(opCount === 490) {
                                 chunks.push(currentBatch);
                                 currentBatch = db.batch();
@@ -484,23 +508,23 @@
                     }
                     
                     if (opCount > 0) chunks.push(currentBatch);
-                    
-                    // Ejecutar todos los envíos
                     for (let b of chunks) { await b.commit(); }
 
                     cerrarModal('modalCSV'); input.value = ''; 
                     if(agregados > 0) showToast(`¡Éxito! Se sincronizaron ${agregados} productos.`);
                     else showToast("No se encontraron datos válidos.", "warning");
 
-                } catch (error) { console.log(error); showToast("Sube un archivo .xlsx o .csv válido.", "error"); }
+                } catch (error) { 
+                    console.log(error); 
+                    showToast("Error al leer el archivo. Revisa el formato.", "error"); 
+                }
             }; 
-            reader.readAsArrayBuffer(input.files[0]);
+            reader.readAsArrayBuffer(file);
         }
 
         // ==========================================
-        // 3. UI Y LOGICA DE RENDERIZADO
+        // 4. UI Y LOGICA DE RENDERIZADO
         // ==========================================
-        
         function configurarInterfazPorRol() {
             const rol = localStorage.getItem('rolUsuario') || 'admin';
             
@@ -515,7 +539,6 @@
                 document.getElementById('nombreLocalDisplay').innerHTML = `<img src="img/logo.png" alt="Logo" onerror="this.style.display='none'"> ${clienteActual.nombre}`;
             }
 
-            // Alertas de Pago solo para Admin
             if (!clienteActual.fechaPago) { clienteActual.fechaPago = '2026-12-31'; }
             const hoy = new Date(); hoy.setHours(0,0,0,0);
             const [y, m, d] = clienteActual.fechaPago.split('-'); const fechaPago = new Date(y, m - 1, d);
@@ -565,7 +588,6 @@
         function limpiarBasura(texto) { return typeof texto === 'string' && !texto.includes('') && !texto.includes('styles.xml') && !texto.includes('xl/worksheets') && texto.trim() !== ''; }
 
         function actualizarDatalistsNube() {
-            // Genera autocompletado en base a los productos actuales (Más eficiente y limpio)
             let nombres = new Set(); let marcas = new Set(); let proveedores = new Set();
             productosGlobales.forEach(p => {
                 if(p.nombre && limpiarBasura(p.nombre)) nombres.add(p.nombre);
@@ -573,7 +595,6 @@
                 if(p.proveedor && limpiarBasura(p.proveedor)) proveedores.add(p.proveedor);
             });
             
-            // También sumamos los históricos que guardamos en la nube
             let catHist = clienteActual.catalogos || { nombres: [], marcas: [], proveedores: [] };
             catHist.nombres.forEach(n => nombres.add(n));
             catHist.marcas.forEach(m => marcas.add(m));
@@ -612,7 +633,6 @@
         }
 
         function renderizarProductosNube() {
-            // Ordenar por fecha
             const productosOrd = [...productosGlobales].sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
             const lista = document.getElementById('listaProductos'); lista.innerHTML = '';
             const hoy = new Date(); hoy.setHours(0,0,0,0);
@@ -688,12 +708,6 @@
             document.querySelectorAll('.product-item').forEach(item => { item.style.display = item.getAttribute('data-search').includes(t) ? 'flex' : 'none'; });
         }
 
-        function descargarPlantillaCSV() {
-            const contenido = "Nombre (Obligatorio);Marca;Lote;Proveedor;Fecha Vencimiento (YYYY-MM-DD)\nLeche Entera;Colun;L-9981;Distribuidora Sur;2026-12-31";
-            const blob = new Blob(["\uFEFF" + contenido], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "Plantilla_Inventario.csv"; link.click();
-        }
-
         function limpiarFormularioProd() {
             document.getElementById('nombreProducto').value = ''; document.getElementById('marcaProducto').value = ''; document.getElementById('loteProducto').value = ''; document.getElementById('proveedorProducto').value = ''; document.getElementById('fechaVencimiento').value = '';
             document.querySelectorAll('.custom-autocomplete').forEach(ul => ul.classList.remove('active')); idProductoEnEdicion = null;
@@ -711,22 +725,15 @@
         if(window.innerWidth < 768) switchTab('inventario');
     </script>
     <script>
-    // Bloquear clic derecho
+    // Bloquear clic derecho y herramientas desarrollador
     document.addEventListener('contextmenu', event => event.preventDefault());
-
-    // Bloquear teclas de herramientas de desarrollador
     document.onkeydown = function(e) {
-        // Bloquear F12
         if(e.keyCode == 123) { return false; }
-        // Bloquear Ctrl+Shift+I (Inspeccionar)
         if(e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) { return false; }
-        // Bloquear Ctrl+Shift+C (Inspeccionar elemento)
         if(e.ctrlKey && e.shiftKey && e.keyCode == 'C'.charCodeAt(0)) { return false; }
-        // Bloquear Ctrl+Shift+J (Consola)
         if(e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)) { return false; }
-        // Bloquear Ctrl+U (Ver código fuente)
         if(e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) { return false; }
     }
-</script>
+    </script>
 </body>
 </html>
