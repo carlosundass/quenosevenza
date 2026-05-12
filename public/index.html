@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Que No Se Venza - Inventario</title>
+    
+    <!-- FUENTES Y VECTORES -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,500,0,0" rel="stylesheet" />
+    
+    <!-- LIBRERÍAS EXTERNAS -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    
+    <!-- FIREBASE SCRIPTS -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="firebase-config.js"></script>
+
+    <style>
+        :root { --primary: #4F46E5; --primary-hover: #4338CA; --bg-color: #F3F4F6; --card-bg: #FFFFFF; --text-main: #1F2937; --text-muted: #6B7280; --danger: #EF4444; --warning: #F59E0B; --success: #10B981; --info: #3B82F6; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); }
+        .app-container { max-width: 1100px; margin: 0 auto; padding: 20px; min-height: 100vh; display: flex; flex-direction: column; position: relative; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #E5E7EB; padding-bottom: 15px; flex-wrap: wrap; gap: 10px;}
+        header h1 { font-size: 22px; color: var(--primary); font-weight: 700; display: flex; align-items: center; gap: 8px;}
+        header img { height: 40px; object-fit: contain; }
+        .header-actions { display: flex; gap: 10px; flex-wrap: wrap;}
+        .btn-header { background: white; border: 1px solid #E5E7EB; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px;}
+        .btn-header:hover { background: #F3F4F6; }
+        .btn-reports { background: var(--primary); color: white; border: none; }
+        .btn-reports:hover { background: var(--primary-hover); }
+        .top-alerts-container { display: flex; flex-direction: column; gap: 10px; margin-bottom: 25px; }
+        .top-alert { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-radius: 12px; font-size: 14px; font-weight: 500; animation: slideDown 0.3s ease; }
+        .top-alert.rojo { background-color: #FEF2F2; color: #991B1B; border-left: 4px solid var(--danger); }
+        .top-alert.amarillo { background-color: #FFFBEB; color: #92400E; border-left: 4px solid var(--warning); }
+        .btn-close-alert { background: none; border: none; font-size: 20px; cursor: pointer; color: inherit; opacity: 0.6; padding: 0 5px; display: flex; align-items: center;}
+        .btn-close-alert:hover { opacity: 1; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .dashboard-grid { display: grid; grid-template-columns: 1fr; gap: 30px; align-items: start; }
+        .mobile-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab-btn { flex: 1; padding: 12px; border: none; border-radius: 16px; background: #E5E7EB; color: var(--text-muted); font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.3s; display: flex; justify-content: center; align-items: center; gap: 6px;}
+        .tab-btn.active { background: var(--primary); color: white; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3); }
+        .add-card { background: var(--card-bg); padding: 24px; border-radius: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); transition: all 0.3s ease; }
+        .editing-mode { border: 2px solid var(--info); box-shadow: 0 0 15px rgba(59, 130, 246, 0.2); }
+        .reportes-view { display: none; background: var(--card-bg); padding: 24px; border-radius: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 30px; }
+        .autocomplete-wrapper { position: relative; margin-bottom: 12px; }
+        .autocomplete-wrapper label { display: block; font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; padding-left: 10px;}
+        .autocomplete-wrapper input { width: 100%; padding: 12px 16px; border: 2px solid #E5E7EB; border-radius: 20px; font-size: 14px; outline: none; background-color: #F9FAFB; transition: border-color 0.3s;}
+        .autocomplete-wrapper input:focus { border-color: var(--primary); background-color: white; }
+        .custom-autocomplete { position: absolute; top: 100%; left: 0; width: 100%; background: white; border: 1px solid #E5E7EB; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 1000; max-height: 200px; overflow-y: auto; display: none; list-style: none; margin-top: 5px; padding: 8px 0; }
+        .custom-autocomplete.active { display: block; }
+        .autocomplete-item { padding: 10px 16px; font-size: 14px; color: var(--text-main); cursor: pointer; transition: background 0.2s; }
+        .autocomplete-item:hover { background: #F9FAFB; color: var(--primary); font-weight: 500; }
+        .input-group { margin-bottom: 12px; }
+        .input-group label { display: block; font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; padding-left: 10px;}
+        .input-group input { width: 100%; padding: 12px 16px; border: 2px solid #E5E7EB; border-radius: 20px; font-size: 14px; outline: none; background-color: #F9FAFB; transition: border-color 0.3s; cursor: pointer;}
+        .input-group input:focus { border-color: var(--primary); background-color: white; }
+        input::-webkit-calendar-picker-indicator { display: none !important; opacity: 0; }
+        .search-bar { width: 100%; padding: 12px 20px; border: 2px solid #E5E7EB; border-radius: 20px; font-size: 14px; outline: none; background-color: #FFFFFF; transition: border-color 0.3s; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);}
+        .search-bar:focus { border-color: var(--primary); }
+        .form-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .btn-submit { flex: 1; background-color: var(--primary); color: white; border: none; padding: 14px; border-radius: 30px; font-size: 15px; font-weight: 600; cursor: pointer; transition: transform 0.1s, background-color 0.3s; display: flex; justify-content: center; align-items: center; gap: 6px;}
+        .btn-submit:active { transform: scale(0.98); }
+        .btn-submit:hover { background-color: var(--primary-hover); }
+        .btn-cancel { background-color: #6B7280; display: none; }
+        .btn-cancel:hover { background-color: #4B5563; }
+        .section-title { font-size: 18px; margin-bottom: 16px; font-weight: 600; display: flex; align-items: center; justify-content: space-between;}
+        .chart-container { position: relative; height: 280px; width: 100%; }
+        @media (min-width: 768px) { .app-container { padding: 40px 30px; } .mobile-tabs { display: none; } .reportes-view { display: block; } #inventarioView { display: block !important; } .dashboard-grid { grid-template-columns: 350px 1fr; gap: 40px; } .add-card { position: sticky; top: 40px; } }
+        .product-list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+        .product-item { background: var(--card-bg); padding: 16px 20px; border-radius: 20px; display: flex; justify-content: space-between; align-items: center; border-left: 6px solid transparent; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+        .product-info span { display: block; }
+        .product-name { font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 8px;}
+        .product-date { font-size: 13px; color: var(--text-main); font-weight: 500; margin-top: 2px;}
+        .product-details { font-size: 11px; color: var(--text-muted); margin-top: 6px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .detail-pill { background: #F3F4F6; padding: 3px 8px; border-radius: 10px; display: flex; align-items: center; gap: 4px; }
+        .badge { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 4px;}
+        .estado-rojo { border-left-color: var(--danger); } .estado-rojo .badge { background-color: #FEE2E2; color: var(--danger); }
+        .estado-amarillo { border-left-color: var(--warning); } .estado-amarillo .badge { background-color: #FEF3C7; color: var(--warning); }
+        .estado-verde { border-left-color: var(--success); } .estado-verde .badge { background-color: #D1FAE5; color: var(--success); }
+        .actions { display: flex; align-items: center; gap: 8px; }
+        .btn-action-sm { background: #F3F4F6; border: none; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background-color 0.2s; font-size: 18px; color: var(--text-main);}
+        .btn-edit-prod:hover { background: #DBEAFE; color: var(--info); }
+        .btn-check-prod { background: #D1FAE5; color: var(--success); border-radius: 12px; padding: 0 12px; width: auto; font-weight: 600; }
+        .btn-check-prod:hover { background: var(--success); color: white; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(17, 24, 39, 0.7); backdrop-filter: blur(3px); z-index: 2000; display: none; align-items: center; justify-content: center; padding: 20px; opacity: 0; transition: opacity 0.3s; }
+        .modal-overlay.active { display: flex; opacity: 1; }
+        .modal-card { background: var(--card-bg); padding: 30px; border-radius: 24px; width: 100%; max-width: 400px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); text-align: center; position: relative; transform: translateY(20px); transition: transform 0.3s; }
+        .modal-overlay.active .modal-card { transform: translateY(0); }
+        .modal-title { font-size: 20px; font-weight: 700; color: var(--text-main); margin-bottom: 10px; display: flex; justify-content: center; align-items: center; gap: 8px;}
+        .modal-desc { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+        .exit-options { display: flex; flex-direction: column; gap: 10px; }
+        .btn-exit-opt { background: #F9FAFB; border: 2px solid #E5E7EB; padding: 14px; border-radius: 16px; font-size: 15px; font-weight: 600; color: var(--text-main); cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 10px; text-align: left; }
+        .btn-exit-opt:hover { border-color: var(--primary); background: #EEF2FF; }
+        .opt-vendido:hover { border-color: var(--success); background: #ECFDF5; }
+        .opt-merma:hover { border-color: var(--danger); background: #FEF2F2; }
+        .btn-close-modal { position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center;}
+        .lock-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(5px); z-index: 3000; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
+        .lock-screen.active { display: flex; }
+        .lock-screen h2 { color: var(--danger); font-size: 26px; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;}
+        .footer { text-align: center; padding: 40px 0 20px 0; color: var(--text-muted); font-size: 13px; margin-top: auto; }
+        .billing-banner { padding: 12px 20px; font-weight: 600; font-size: 14px; display: none; justify-content: space-between; align-items: center; margin-bottom: 20px; border-radius: 12px;}
+        .global-announcement { background: #FEF3C7; color: #92400E; border: 1px solid #F59E0B; padding: 12px 20px; border-radius: 12px; margin-bottom: 20px; font-size: 14px; font-weight: 600; display: none; align-items: center; gap: 10px;}
+        .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: white; border-radius: 12px; padding: 16px 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 12px; transform: translateX(120%); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); font-size: 14px; font-weight: 500;}
+        .toast.show { transform: translateX(0); }
+    </style>
+</head>
+<body>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- PANTALLA DE BLOQUEO POR MOROSIDAD -->
+    <div class="lock-screen" id="lockScreen">
+        <h2><span class="material-symbols-rounded" style="font-size:32px;">lock</span> Servicio Suspendido</h2>
+        <p style="margin-bottom:20px;">Tu cuenta ha sido desactivada por falta de pago.</p>
+        <button class="btn-submit" style="max-width: 350px; background-color: var(--success);" onclick="window.location.href='/pago.html'"><span class="material-symbols-rounded">payment</span> Pagar y Reactivar</button>
+        <button class="btn-header" style="margin-top: 25px; border:none; background:transparent; text-decoration:underline;" onclick="cerrarSesion()">Salir</button>
+    </div>
+
+    <!-- MODAL SOPORTE -->
+    <div class="modal-overlay" id="modalSoporte">
+        <div class="modal-card">
+            <button onclick="cerrarModal('modalSoporte')" class="btn-close-modal"><span class="material-symbols-rounded">close</span></button>
+            <h2 class="modal-title"><span class="material-symbols-rounded">support_agent</span> Centro de Ayuda</h2>
+            <p class="modal-desc">¿Tienes problemas con el inventario?</p>
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 20px;">
+                <button class="btn-exit-opt" style="justify-content: center; background: #ECFDF5; border-color: #10B981; color: #065F46;" onclick="window.open('https://wa.me/56912345678', '_blank')">
+                    <span class="material-symbols-rounded">chat</span> Contactar por WhatsApp
+                </button>
+                <button class="btn-exit-opt" style="justify-content: center; background: #EFF6FF; border-color: #3B82F6; color: #1E3A8A;" onclick="window.location.href='mailto:soporte@quenossevenza.cl'">
+                    <span class="material-symbols-rounded">mail</span> Enviar un Correo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE CLAVES -->
+    <div class="modal-overlay" id="modalClave">
+        <div class="modal-card">
+            <button onclick="cerrarModal('modalClave')" class="btn-close-modal"><span class="material-symbols-rounded">close</span></button>
+            <h2 class="modal-title"><span class="material-symbols-rounded">key</span> Cambiar Claves</h2>
+            
+            <p style="text-align:left; font-size:12px; color:var(--text-muted); font-weight:600; margin-bottom:5px;">Clave Administrador Actual</p>
+            <input type="password" id="claveActualInput" placeholder="Obligatorio para guardar" style="width:100%; padding:10px; border-radius:15px; border:2px solid #e5e7eb; margin-bottom:15px; outline:none;" onkeydown="if(event.key === 'Enter') guardarNuevaClave()">
+            
+            <hr style="border:none; border-top:1px solid #e5e7eb; margin:15px 0;">
+
+            <p style="text-align:left; font-size:12px; color:var(--primary); font-weight:600; margin-bottom:5px;">Nuevo PIN Administrador</p>
+            <input type="password" id="nuevaClaveInput" placeholder="Dejar en blanco para no cambiar" style="width:100%; padding:10px; border-radius:15px; border:2px solid var(--primary); margin-bottom:15px; outline:none;" onkeydown="if(event.key === 'Enter') guardarNuevaClave()">
+
+            <p style="text-align:left; font-size:12px; color:var(--warning); font-weight:600; margin-bottom:5px;">Nuevo PIN Vendedor</p>
+            <input type="password" id="nuevaClaveVendedorInput" placeholder="Dejar en blanco para no cambiar" style="width:100%; padding:10px; border-radius:15px; border:2px solid var(--warning); margin-bottom:15px; outline:none;" onkeydown="if(event.key === 'Enter') guardarNuevaClave()">
+
+            <button class="btn-submit" onclick="guardarNuevaClave()"><span class="material-symbols-rounded">save</span> Guardar Cambios</button>
+        </div>
+    </div>
+
+    <!-- MODAL DE EXCEL -->
+    <div class="modal-overlay" id="modalCSV">
+        <div class="modal-card">
+            <button onclick="cerrarModal('modalCSV')" class="btn-close-modal"><span class="material-symbols-rounded">close</span></button>
+            <h2 class="modal-title"><span class="material-symbols-rounded">upload_file</span> Subir Excel</h2>
+            <button class="btn-header" style="width:100%; padding: 12px; margin-bottom: 20px; border-color: var(--info); color: var(--info);" onclick="descargarPlantillaCSV()"><span class="material-symbols-rounded">download</span> Descargar Plantilla</button>
+            <div style="text-align: left; margin-bottom: 15px; background: #F9FAFB; padding: 15px; border-radius: 12px; border: 1px solid #E5E7EB;">
+                <input type="file" id="archivoCSV" accept=".csv, .xlsx, .xls" style="width: 100%; margin-top: 10px; font-size: 13px; cursor: pointer;">
+            </div>
+            <button class="btn-submit" onclick="procesarExcelMasivo()"><span class="material-symbols-rounded">cloud_upload</span> Cargar a la Nube</button>
+        </div>
+    </div>
+
+    <!-- MODAL DE SALIDA -->
+    <div class="modal-overlay" id="modalSalida">
+        <div class="modal-card">
+            <button onclick="cerrarModal('modalSalida')" class="btn-close-modal"><span class="material-symbols-rounded">close</span></button>
+            <h2 class="modal-title"><span class="material-symbols-rounded">eco</span> Gestión Preventiva</h2>
+            <p class="modal-desc">¿Qué destino tuvo <strong id="nombreProdSalida">...</strong>?</p>
+            <div class="exit-options">
+                <button class="btn-exit-opt opt-vendido" onclick="procesarSalida('Consumido')"><span class="material-symbols-rounded" style="color:var(--success)">restaurant</span> Consumo / Uso a tiempo</button>
+                <button class="btn-exit-opt" onclick="procesarSalida('Donación')"><span class="material-symbols-rounded" style="color:var(--info)">volunteer_activism</span> Donado (Salvado)</button>
+                <button class="btn-exit-opt" onclick="procesarSalida('Devolución')"><span class="material-symbols-rounded" style="color:var(--text-muted)">keyboard_return</span> Devolución Proveedor</button>
+                <button class="btn-exit-opt opt-merma" onclick="procesarSalida('Merma')"><span class="material-symbols-rounded" style="color:var(--danger)">delete</span> Merma (Se venció)</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container" id="mainApp" style="display:none;">
+        <div id="billingBanner" class="billing-banner"></div>
+        <div id="anuncioGlobal" class="global-announcement"></div>
+        
+        <header>
+            <h1 id="nombreLocalDisplay">
+                <img src="img/logo.png" alt="Logo" onerror="this.style.display='none'">
+                Cargando...
+            </h1>
+            <div class="header-actions">
+                <button class="btn-header" onclick="abrirModalSoporte()" style="color: #059669; border-color: #10B981;"><span class="material-symbols-rounded">help</span> Ayuda</button>
+                <button class="btn-header" id="btnUpload" onclick="abrirModalCSV()" style="color:var(--primary); border-color:var(--primary);"><span class="material-symbols-rounded">upload_file</span> Subir Excel</button>
+                <button class="btn-header btn-reports" id="btnReports" onclick="window.location.href='/reportes.html'"><span class="material-symbols-rounded">analytics</span> Reportes</button>
+                <button class="btn-header" id="btnClave" onclick="abrirModalClave()"><span class="material-symbols-rounded">key</span> Claves</button>
+                <button class="btn-header" onclick="cerrarSesion()">Salir <span class="material-symbols-rounded">logout</span></button>
+            </div>
+        </header>
+
+        <div id="topAlertsContainer" class="top-alerts-container"></div>
+
+        <div class="dashboard-grid">
+            <aside class="add-card" id="formCardProd">
+                <h3 id="formTitleProd"><span class="material-symbols-rounded">add_circle</span> Nuevo Registro</h3>
+                <div class="autocomplete-wrapper">
+                    <label>Nombre del producto</label>
+                    <input type="text" id="nombreProducto" placeholder="Ej: Agua Sin Gas 1L" required autocomplete="off" onkeydown="if(event.key === 'Enter') procesarFormulario()">
+                    <ul id="listaNombres" class="custom-autocomplete"></ul>
+                </div>
+                <div class="autocomplete-wrapper">
+                    <label>Marca</label>
+                    <input type="text" id="marcaProducto" placeholder="Ej: Nestlé" autocomplete="off" onkeydown="if(event.key === 'Enter') procesarFormulario()">
+                    <ul id="listaMarcas" class="custom-autocomplete"></ul>
+                </div>
+                <div class="input-group">
+                    <label>Lote</label>
+                    <input type="text" id="loteProducto" placeholder="Opcional" onkeydown="if(event.key === 'Enter') procesarFormulario()">
+                </div>
+                <div class="autocomplete-wrapper">
+                    <label>Proveedor</label>
+                    <input type="text" id="proveedorProducto" placeholder="Opcional" autocomplete="off" onkeydown="if(event.key === 'Enter') procesarFormulario()">
+                    <ul id="listaProveedores" class="custom-autocomplete"></ul>
+                </div>
+                <div class="input-group">
+                    <label>Fecha de vencimiento</label>
+                    <input type="date" id="fechaVencimiento" required onclick="this.showPicker()" onkeydown="if(event.key === 'Enter') procesarFormulario()">
+                </div>
+                <div class="form-actions">
+                    <button class="btn-submit btn-cancel" id="btnCancelarProd" onclick="cancelarEdicionProd()"><span class="material-symbols-rounded">close</span> Cancelar</button>
+                    <button class="btn-submit" id="btnGuardarProd" onclick="procesarFormulario()"><span class="material-symbols-rounded">cloud_upload</span> Guardar</button>
+                </div>
+            </aside>
+
+            <main class="right-column">
+                <div class="mobile-tabs" id="mobileTabsContainer">
+                    <button class="tab-btn active" onclick="switchTab('inventario')"><span class="material-symbols-rounded">list_alt</span> Lista</button>
+                    <button class="tab-btn" id="mobileBtnReportes" onclick="switchTab('reportes')"><span class="material-symbols-rounded">pie_chart</span> Resumen</button>
+                </div>
+                
+                <div id="reportesView" class="reportes-view">
+                    <h3 class="section-title"><span class="material-symbols-rounded">donut_large</span> Estado General del Inventario</h3>
+                    <div class="chart-container"><canvas id="estadoChart"></canvas></div>
+                </div>
+
+                <div id="inventarioView">
+                    <h3 class="section-title">
+                        Listado de Vencimientos
+                        <span id="contadorProductos" style="font-size: 13px; font-weight: 500; color: var(--text-muted); background: #E5E7EB; padding: 4px 10px; border-radius: 20px;">0 prod</span>
+                    </h3>
+                    <input type="text" id="buscadorInventario" class="search-bar" onkeyup="filtrarInventario()" placeholder="🔍 Buscar por nombre, marca, lote o proveedor...">
+                    <ul class="product-list" id="listaProductos"></ul>
+                </div>
+            </main>
+        </div>
+        <p class="footer">Desarrollado por Carlos</p>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. UTILIDADES Y UI
+        // ==========================================
+        function showToast(msj, tipo = 'success') {
+            const container = document.getElementById('toastContainer'); const toast = document.createElement('div'); toast.className = `toast`;
+            let icon = tipo === 'success' ? 'cloud_done' : (tipo === 'error' ? 'error' : 'warning'); let color = `var(--${tipo})`;
+            toast.innerHTML = `<span class="material-symbols-rounded" style="color: ${color}">${icon}</span> <span style="color: var(--text-main)">${msj}</span>`;
+            toast.style.borderLeft = `4px solid ${color}`; container.appendChild(toast);
+            setTimeout(() => toast.classList.add('show'), 10); setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3500);
+        }
+
+        function switchTab(tab) {
+            if(window.innerWidth >= 768) return;
+            const inv = document.getElementById('inventarioView'); const rep = document.getElementById('reportesView'); const btns = document.querySelectorAll('.tab-btn');
+            if(tab === 'inventario') { inv.style.display = 'block'; rep.style.display = 'none'; btns[0].classList.add('active'); btns[1].classList.remove('active'); } 
+            else { inv.style.display = 'none'; rep.style.display = 'block'; btns[0].classList.remove('active'); btns[1].classList.add('active'); }
+        }
+        window.addEventListener('resize', () => {
+            if(window.innerWidth >= 768) {
+                document.getElementById('inventarioView').style.display = 'block';
+                if(localStorage.getItem('rolUsuario') === 'admin') document.getElementById('reportesView').style.display = 'block';
+            } else { switchTab('inventario'); }
+        });
+
+        function abrirModalSoporte() { document.getElementById('modalSoporte').classList.add('active'); }
+        function abrirModalClave() {
+            document.getElementById('claveActualInput').value = ''; document.getElementById('nuevaClaveInput').value = ''; document.getElementById('nuevaClaveVendedorInput').value = ''; document.getElementById('modalClave').classList.add('active');
+        }
+        function abrirModalCSV() { document.getElementById('modalCSV').classList.add('active'); }
+        function cerrarModal(id) { document.getElementById(id).classList.remove('active'); }
+        function cerrarSesion() { localStorage.removeItem('sesionActual'); localStorage.removeItem('rolUsuario'); window.location.href='/login.html'; }
+
+        // ==========================================
+        // 2. NÚCLEO DE FIREBASE (FASE 2)
+        // ==========================================
+        let clienteActual = null; 
+        let idProductoEnEdicion = null; 
+        let idProductoParaSalida = null;
+        let productosGlobales = []; // Reemplaza al obtenerProductos() antiguo
+
+        // A. CONEXIÓN Y MIGRACIÓN INICIAL
+        function verificarSesionFirebase() {
+            const idSesion = localStorage.getItem('sesionActual');
+            if (!idSesion) { window.location.href = '/login.html'; return; }
+
+            // 1. Escuchar al Cliente (Seguridad y Suspensión)
+            db.collection('clientes').doc(String(idSesion)).onSnapshot(async (doc) => {
+                if (!doc.exists) { cerrarSesion(); return; }
+                clienteActual = doc.data();
+                
+                // Si lo suspenden, mostrar pantalla de bloqueo inmediatamente
+                if (!clienteActual.activo) {
+                    document.getElementById('lockScreen').classList.add('active');
+                    document.getElementById('mainApp').style.display = 'none'; 
+                    return;
+                } else {
+                    document.getElementById('lockScreen').classList.remove('active');
+                    document.getElementById('mainApp').style.display = 'flex';
+                }
+
+                configurarInterfazPorRol();
+
+                // 2. MIGRACIÓN FANTASMA (Solo ocurre 1 vez si hay datos locales)
+                if(!window.migracionHecha) {
+                    window.migracionHecha = true;
+                    await migrarInventarioLocal();
+                    iniciarListenerInventario(); // Empieza a leer la nube
+                }
+            });
+
+            // 3. Escuchar Anuncios Globales
+            db.collection('sistema').doc('anuncio').onSnapshot((doc) => {
+                if(doc.exists && doc.data().texto) {
+                    const b = document.getElementById('anuncioGlobal');
+                    b.innerHTML = `<span class="material-symbols-rounded">campaign</span> ${doc.data().texto}`; 
+                    b.style.display = 'flex';
+                } else {
+                    document.getElementById('anuncioGlobal').style.display = 'none';
+                }
+            });
+        }
+
+        async function migrarInventarioLocal() {
+            const id = clienteActual.id;
+            const keyInv = `vencimientos_${id}`;
+            const keyHist = `historial_${id}`;
+            const invLocal = JSON.parse(localStorage.getItem(keyInv));
+            const histLocal = JSON.parse(localStorage.getItem(keyHist));
+
+            if (invLocal && invLocal.length > 0) {
+                showToast("Sincronizando inventario con la nube...", "info");
+                const batch = db.batch();
+                invLocal.forEach(p => {
+                    const ref = db.collection('clientes').doc(String(id)).collection('productos').doc(String(p.id));
+                    batch.set(ref, p);
+                });
+                await batch.commit();
+                localStorage.removeItem(keyInv);
+            }
+
+            if (histLocal && histLocal.length > 0) {
+                const batch = db.batch();
+                histLocal.forEach(h => {
+                    const ref = db.collection('clientes').doc(String(id)).collection('historial').doc(String(h.id));
+                    batch.set(ref, h);
+                });
+                await batch.commit();
+                localStorage.removeItem(keyHist);
+            }
+        }
+
+        // B. LECTURA EN TIEMPO REAL
+        function iniciarListenerInventario() {
+            db.collection('clientes').doc(String(clienteActual.id)).collection('productos')
+            .onSnapshot(snapshot => {
+                productosGlobales = [];
+                snapshot.forEach(doc => productosGlobales.push(doc.data()));
+                actualizarDatalistsNube(); // Actualiza el autocompletado en base a los productos reales
+                renderizarProductosNube(); // Dibuja la lista en pantalla
+            });
+        }
+
+        // C. ESCRITURA EN LA NUBE
+        async function procesarFormulario() {
+            const nombre = document.getElementById('nombreProducto').value.trim(); const marca = document.getElementById('marcaProducto').value.trim();
+            const lote = document.getElementById('loteProducto').value.trim(); const proveedor = document.getElementById('proveedorProducto').value.trim();
+            const fecha = document.getElementById('fechaVencimiento').value;
+
+            if (!nombre || !fecha) return showToast('Nombre y Fecha son obligatorios.', 'warning');
+            
+            const btnG = document.getElementById('btnGuardarProd');
+            btnG.disabled = true; btnG.innerHTML = `<span class="material-symbols-rounded">cloud_sync</span> ...`;
+
+            const idNuevo = idProductoEnEdicion || Date.now();
+            const nuevoProducto = { id: idNuevo, nombre, marca, lote, proveedor, fecha };
+            
+            try {
+                await db.collection('clientes').doc(String(clienteActual.id)).collection('productos').doc(String(idNuevo)).set(nuevoProducto);
+                
+                // Actualiza catálogos de historial si es necesario (Opcional, el autocompletado ya lee de productosGlobales)
+                procesarAprendizaje(nombre, marca, proveedor); 
+                
+                limpiarFormularioProd(); 
+                showToast(idProductoEnEdicion ? "Actualizado en la nube." : "Guardado en la nube.");
+            } catch(e) {
+                showToast("Error de conexión.", "error");
+            } finally {
+                btnG.disabled = false; btnG.innerHTML = `<span class="material-symbols-rounded">cloud_upload</span> Guardar`;
+            }
+        }
+
+        async function procesarSalida(motivo) {
+            const p = productosGlobales.find(x => x.id === idProductoParaSalida);
+            if(p) {
+                const pSaliendo = { ...p, motivoSalida: motivo, fechaSalida: new Date().toISOString() };
+                
+                try {
+                    const batch = db.batch();
+                    const docProd = db.collection('clientes').doc(String(clienteActual.id)).collection('productos').doc(String(p.id));
+                    const docHist = db.collection('clientes').doc(String(clienteActual.id)).collection('historial').doc(String(p.id));
+                    
+                    batch.delete(docProd);
+                    batch.set(docHist, pSaliendo);
+                    
+                    await batch.commit();
+                    
+                    if(idProductoEnEdicion === idProductoParaSalida) cancelarEdicionProd();
+                    cerrarModal('modalSalida'); 
+                    document.getElementById('buscadorInventario').value = '';
+                    showToast("Movimiento registrado en la nube.", "success");
+                } catch(e) {
+                    showToast("Error al procesar la salida.", "error");
+                }
+            }
+        }
+
+        async function procesarExcelMasivo() {
+            const input = document.getElementById('archivoCSV');
+            if (!input.files || input.files.length === 0) return showToast("Selecciona un archivo.", "warning");
+            const reader = new FileReader();
+            
+            reader.onload = async function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result); const workbook = XLSX.read(data, {type: 'array'});
+                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1, raw: false, dateNF: 'yyyy-mm-dd'});
+                    
+                    let agregados = 0;
+                    const chunks = [];
+                    let currentBatch = db.batch();
+                    let opCount = 0;
+
+                    showToast("Subiendo archivo a la nube...", "info");
+
+                    for (let i = 1; i < json.length; i++) {
+                        const fila = json[i]; if (!fila || fila.length === 0) continue;
+                        let nombre = '', marca = '', lote = '', proveedor = '', fecha = '';
+                        if (fila.length === 1 && typeof fila[0] === 'string' && fila[0].includes(';')) {
+                            const partes = fila[0].split(';'); nombre = partes[0] ? partes[0].trim() : ''; marca = partes[1] ? partes[1].trim() : ''; lote = partes[2] ? partes[2].trim() : ''; proveedor = partes[3] ? partes[3].trim() : ''; fecha = partes[4] ? partes[4].trim() : '';
+                        } else {
+                            nombre = fila[0] ? String(fila[0]).trim() : ''; marca = fila[1] ? String(fila[1]).trim() : ''; lote = fila[2] ? String(fila[2]).trim() : ''; proveedor = fila[3] ? String(fila[3]).trim() : ''; fecha = fila[4] ? String(fila[4]).trim() : '';
+                        }
+                        if(fecha && fecha.includes('/')) { const p = fecha.split('/'); if(p.length === 3 && p[2].length === 4) { fecha = `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`; } }
+                        
+                        if (nombre && fecha && fecha.length >= 8 && !fecha.includes('Invalid') && limpiarBasura(nombre)) {
+                            const nuevoId = Date.now() + i;
+                            const pData = { id: nuevoId, nombre, marca, lote, proveedor, fecha };
+                            const ref = db.collection('clientes').doc(String(clienteActual.id)).collection('productos').doc(String(nuevoId));
+                            
+                            currentBatch.set(ref, pData);
+                            opCount++; agregados++;
+                            
+                            // Límite de Firebase Batch
+                            if(opCount === 490) {
+                                chunks.push(currentBatch);
+                                currentBatch = db.batch();
+                                opCount = 0;
+                            }
+                        }
+                    }
+                    
+                    if (opCount > 0) chunks.push(currentBatch);
+                    
+                    // Ejecutar todos los envíos
+                    for (let b of chunks) { await b.commit(); }
+
+                    cerrarModal('modalCSV'); input.value = ''; 
+                    if(agregados > 0) showToast(`¡Éxito! Se sincronizaron ${agregados} productos.`);
+                    else showToast("No se encontraron datos válidos.", "warning");
+
+                } catch (error) { console.log(error); showToast("Sube un archivo .xlsx o .csv válido.", "error"); }
+            }; 
+            reader.readAsArrayBuffer(input.files[0]);
+        }
+
+        // ==========================================
+        // 3. UI Y LOGICA DE RENDERIZADO
+        // ==========================================
+        
+        function configurarInterfazPorRol() {
+            const rol = localStorage.getItem('rolUsuario') || 'admin';
+            
+            if (rol === 'vendedor') {
+                document.getElementById('btnUpload').style.display = 'none';
+                document.getElementById('btnReports').style.display = 'none';
+                document.getElementById('btnClave').style.display = 'none';
+                document.getElementById('mobileBtnReportes').style.display = 'none';
+                document.getElementById('reportesView').style.display = 'none';
+                document.getElementById('nombreLocalDisplay').innerHTML = `<img src="img/logo.png" alt="Logo" onerror="this.style.display='none'"> ${clienteActual.nombre} <span style="font-size:12px; background:#E5E7EB; color:#6B7280; padding:2px 8px; border-radius:10px; margin-left:10px;">Vendedor</span>`;
+            } else {
+                document.getElementById('nombreLocalDisplay').innerHTML = `<img src="img/logo.png" alt="Logo" onerror="this.style.display='none'"> ${clienteActual.nombre}`;
+            }
+
+            // Alertas de Pago solo para Admin
+            if (!clienteActual.fechaPago) { clienteActual.fechaPago = '2026-12-31'; }
+            const hoy = new Date(); hoy.setHours(0,0,0,0);
+            const [y, m, d] = clienteActual.fechaPago.split('-'); const fechaPago = new Date(y, m - 1, d);
+            const diasRestantes = Math.ceil((fechaPago.getTime() - hoy.getTime()) / (1000 * 3600 * 24));
+            const banner = document.getElementById('billingBanner');
+            
+            if(rol === 'admin') {
+                const btnPagarHtml = `<button onclick="window.location.href='/pago.html'" style="background:var(--primary); color:white; border:none; padding:8px 16px; border-radius:20px; cursor:pointer; font-size:13px; font-weight:600; margin-left:15px; display:flex; align-items:center; gap:4px;"><span class="material-symbols-rounded" style="font-size:16px;">credit_card</span> Pagar</button>`;
+                if (diasRestantes < 0) {
+                    banner.style.display = 'flex'; banner.className = 'billing-banner banner-danger';
+                    banner.innerHTML = `<span><span class="material-symbols-rounded" style="vertical-align:middle; font-size:18px;">warning</span> Tu plan venció hace ${Math.abs(diasRestantes)} días.</span> ${btnPagarHtml}`;
+                } else if (diasRestantes <= 7) {
+                    banner.style.display = 'flex'; banner.className = 'billing-banner banner-warning';
+                    banner.innerHTML = `<span><span class="material-symbols-rounded" style="vertical-align:middle; font-size:18px;">schedule</span> Tu próximo cobro es en ${diasRestantes} días.</span> ${btnPagarHtml}`;
+                } else {
+                    banner.style.display = 'none';
+                }
+            }
+        }
+
+        async function guardarNuevaClave() {
+            const actual = document.getElementById('claveActualInput').value;
+            const nuevaAdmin = document.getElementById('nuevaClaveInput').value;
+            const nuevaVend = document.getElementById('nuevaClaveVendedorInput').value;
+            
+            if(!actual) return showToast("Debes ingresar tu contraseña actual.", "warning");
+            if(actual !== clienteActual.clave) return showToast("La contraseña actual es incorrecta.", "error");
+            
+            let cambiado = false;
+            let adminFinal = nuevaAdmin ? nuevaAdmin : clienteActual.clave;
+            let vendFinal = nuevaVend ? nuevaVend : clienteActual.claveVendedor;
+
+            if(nuevaAdmin && nuevaAdmin.length < 4) return showToast("El PIN Admin debe tener al menos 4 caracteres.", "warning");
+            if(nuevaVend && nuevaVend.length < 4) return showToast("El PIN Vendedor debe tener al menos 4 caracteres.", "warning");
+            if (adminFinal === vendFinal) return showToast("El PIN de Administrador y Vendedor NO pueden ser iguales.", "error");
+
+            let updates = {};
+            if(nuevaAdmin) { updates.clave = nuevaAdmin; cambiado = true; }
+            if(nuevaVend) { updates.claveVendedor = nuevaVend; cambiado = true; }
+            
+            if(cambiado) {
+                await db.collection('clientes').doc(String(clienteActual.id)).update(updates);
+                showToast("Claves actualizadas con éxito."); cerrarModal('modalClave');
+            } else { showToast("No ingresaste ningún PIN nuevo.", "warning"); }
+        }
+
+        function limpiarBasura(texto) { return typeof texto === 'string' && !texto.includes('') && !texto.includes('styles.xml') && !texto.includes('xl/worksheets') && texto.trim() !== ''; }
+
+        function actualizarDatalistsNube() {
+            // Genera autocompletado en base a los productos actuales (Más eficiente y limpio)
+            let nombres = new Set(); let marcas = new Set(); let proveedores = new Set();
+            productosGlobales.forEach(p => {
+                if(p.nombre && limpiarBasura(p.nombre)) nombres.add(p.nombre);
+                if(p.marca && limpiarBasura(p.marca)) marcas.add(p.marca);
+                if(p.proveedor && limpiarBasura(p.proveedor)) proveedores.add(p.proveedor);
+            });
+            
+            // También sumamos los históricos que guardamos en la nube
+            let catHist = clienteActual.catalogos || { nombres: [], marcas: [], proveedores: [] };
+            catHist.nombres.forEach(n => nombres.add(n));
+            catHist.marcas.forEach(m => marcas.add(m));
+            catHist.proveedores.forEach(p => proveedores.add(p));
+
+            configurarAutocomplete('nombreProducto', 'listaNombres', Array.from(nombres));
+            configurarAutocomplete('marcaProducto', 'listaMarcas', Array.from(marcas));
+            configurarAutocomplete('proveedorProducto', 'listaProveedores', Array.from(proveedores));
+        }
+
+        async function procesarAprendizaje(n, m, p) {
+            let cat = clienteActual.catalogos || { nombres: [], marcas: [], proveedores: [] };
+            let actualizados = false;
+            if (n && limpiarBasura(n) && !cat.nombres.includes(n)) { cat.nombres.push(n); actualizados = true; }
+            if (m && limpiarBasura(m) && !cat.marcas.includes(m)) { cat.marcas.push(m); actualizados = true; }
+            if (p && limpiarBasura(p) && !cat.proveedores.includes(p)) { cat.proveedores.push(p); actualizados = true; }
+            if (actualizados) { 
+                await db.collection('clientes').doc(String(clienteActual.id)).update({ catalogos: cat });
+            }
+        }
+
+        function configurarAutocomplete(inputId, listaId, opciones) {
+            const input = document.getElementById(inputId); const lista = document.getElementById(listaId);
+            input.addEventListener('input', function() {
+                const val = this.value.trim().toLowerCase(); lista.innerHTML = '';
+                if (!val) { lista.classList.remove('active'); return; }
+                const coincidencias = opciones.filter(item => item.toLowerCase().includes(val));
+                if (coincidencias.length > 0) {
+                    coincidencias.forEach(match => {
+                        const li = document.createElement('li'); li.className = 'autocomplete-item'; li.textContent = match;
+                        li.onclick = function() { input.value = match; lista.classList.remove('active'); }; lista.appendChild(li);
+                    }); lista.classList.add('active');
+                } else { lista.classList.remove('active'); }
+            });
+            document.addEventListener('click', function(e) { if (e.target !== input && e.target !== lista) { lista.classList.remove('active'); } });
+        }
+
+        function renderizarProductosNube() {
+            // Ordenar por fecha
+            const productosOrd = [...productosGlobales].sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
+            const lista = document.getElementById('listaProductos'); lista.innerHTML = '';
+            const hoy = new Date(); hoy.setHours(0,0,0,0);
+            
+            document.getElementById('contadorProductos').innerText = `${productosOrd.length} prod`;
+            actualizarGraficoNube(productosOrd); verificarAlertasSuperioresNube(productosOrd);
+
+            productosOrd.forEach(p => {
+                const fv = new Date(p.fecha + 'T00:00:00'); const dias = Math.ceil((fv - hoy) / (1000*3600*24));
+                let c = 'estado-verde', t = `En ${dias} d`;
+                if(dias <= 3) { c = 'estado-rojo'; t = dias <= 0 ? 'Vencido' : `En ${dias} d`; } else if(dias <= 7) { c = 'estado-amarillo'; }
+                
+                let detallesHtml = '';
+                if(p.lote) detallesHtml += `<span class="detail-pill"><span class="material-symbols-rounded" style="font-size:12px;">tag</span> ${p.lote}</span>`;
+                if(p.proveedor) detallesHtml += `<span class="detail-pill"><span class="material-symbols-rounded" style="font-size:12px;">local_shipping</span> ${p.proveedor}</span>`;
+
+                const nombreCompleto = p.marca ? `${p.nombre} <span style="color:var(--text-muted); font-weight:400;">| ${p.marca}</span>` : p.nombre;
+                const stringBusqueda = `${p.nombre} ${p.marca || ''} ${p.lote || ''} ${p.proveedor || ''}`.toLowerCase();
+
+                const li = document.createElement('li'); li.className = `product-item ${c}`; li.setAttribute('data-search', stringBusqueda);
+                li.innerHTML = `
+                    <div class="product-info">
+                        <span class="product-name">${nombreCompleto}</span>
+                        <span class="product-date">Vence el ${fv.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
+                        ${detallesHtml ? `<div class="product-details">${detallesHtml}</div>` : ''}
+                    </div>
+                    <div class="actions">
+                        <span class="badge"><span class="material-symbols-rounded" style="font-size:14px; margin-right:2px;">schedule</span> ${t}</span>
+                        <button class="btn-action-sm btn-edit-prod" onclick="editarProducto(${p.id})"><span class="material-symbols-rounded" style="font-size:18px;">edit</span></button>
+                        <button class="btn-action-sm btn-check-prod" onclick="abrirModalSalida(${p.id})"><span class="material-symbols-rounded" style="font-size:18px;">check</span></button>
+                    </div>`;
+                lista.appendChild(li);
+            });
+            filtrarInventario();
+        }
+
+        function editarProducto(id) {
+            const p = productosGlobales.find(x => x.id === id); idProductoEnEdicion = id;
+            document.getElementById('nombreProducto').value = p.nombre; document.getElementById('marcaProducto').value = p.marca || '';
+            document.getElementById('loteProducto').value = p.lote || ''; document.getElementById('proveedorProducto').value = p.proveedor || '';
+            document.getElementById('fechaVencimiento').value = p.fecha;
+            document.getElementById('formTitleProd').innerHTML = '<span class="material-symbols-rounded">edit</span> Editando...'; 
+            document.getElementById('btnGuardarProd').innerHTML = '<span class="material-symbols-rounded">cloud_upload</span> Actualizar';
+            document.getElementById('btnGuardarProd').style.backgroundColor = 'var(--info)'; document.getElementById('btnCancelarProd').style.display = 'flex';
+            document.getElementById('formCardProd').classList.add('editing-mode'); window.scrollTo({ top: 0, behavior: 'smooth' });
+            if(window.innerWidth < 768) switchTab('inventario');
+        }
+
+        function abrirModalSalida(id) {
+            const p = productosGlobales.find(x => x.id === id); idProductoParaSalida = id;
+            document.getElementById('nombreProdSalida').innerText = `${p.nombre} ${p.marca || ''}`; document.getElementById('modalSalida').classList.add('active');
+        }
+
+        function verificarAlertasSuperioresNube(productos) {
+            const hoy = new Date(); hoy.setHours(0,0,0,0); const res = { vencidos: 0, criticos: 0 };
+            productos.forEach(p => { const dias = Math.ceil((new Date(p.fecha + 'T00:00:00') - hoy) / (1000*3600*24)); if(dias <= 0) res.vencidos++; else if(dias <= 5) res.criticos++; });
+            const cont = document.getElementById('topAlertsContainer'); cont.innerHTML = '';
+            if(res.vencidos > 0) cont.innerHTML += `<div class="top-alert rojo"><span><span class="material-symbols-rounded" style="vertical-align:middle; font-size:20px;">dangerous</span> Tienes <strong>${res.vencidos}</strong> productos vencidos.</span> <button class="btn-close-alert" onclick="this.parentElement.style.display='none'"><span class="material-symbols-rounded">close</span></button></div>`;
+            if(res.criticos > 0) cont.innerHTML += `<div class="top-alert amarillo"><span><span class="material-symbols-rounded" style="vertical-align:middle; font-size:20px;">warning</span> Tienes <strong>${res.criticos}</strong> productos por vencer (<5 días).</span> <button class="btn-close-alert" onclick="this.parentElement.style.display='none'"><span class="material-symbols-rounded">close</span></button></div>`;
+        }
+
+        let miGrafico = null;
+        function actualizarGraficoNube(productos) {
+            let verdes = 0, amarillos = 0, rojos = 0; const hoy = new Date(); hoy.setHours(0, 0, 0, 0); 
+            productos.forEach(p => { const dias = Math.ceil((new Date(p.fecha + 'T00:00:00') - hoy) / (1000*3600*24)); if (dias <= 3) rojos++; else if (dias <= 7) amarillos++; else verdes++; });
+            const ctx = document.getElementById('estadoChart').getContext('2d');
+            if (miGrafico) { miGrafico.data.datasets[0].data = [verdes, amarillos, rojos]; miGrafico.update(); } 
+            else { miGrafico = new Chart(ctx, { type: 'doughnut', data: { labels: ['Con Tiempo', 'Pronto a Vencer', 'Crítico/Vencido'], datasets: [{ data: [verdes, amarillos, rojos], backgroundColor: ['#10B981', '#F59E0B', '#EF4444'], borderWidth: 2, borderColor: '#FFFFFF' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 20, font: { family: "'Poppins', sans-serif" } } } }, cutout: '70%' } }); }
+        }
+
+        function filtrarInventario() {
+            const t = document.getElementById('buscadorInventario').value.toLowerCase();
+            document.querySelectorAll('.product-item').forEach(item => { item.style.display = item.getAttribute('data-search').includes(t) ? 'flex' : 'none'; });
+        }
+
+        function descargarPlantillaCSV() {
+            const contenido = "Nombre (Obligatorio);Marca;Lote;Proveedor;Fecha Vencimiento (YYYY-MM-DD)\nLeche Entera;Colun;L-9981;Distribuidora Sur;2026-12-31";
+            const blob = new Blob(["\uFEFF" + contenido], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "Plantilla_Inventario.csv"; link.click();
+        }
+
+        function limpiarFormularioProd() {
+            document.getElementById('nombreProducto').value = ''; document.getElementById('marcaProducto').value = ''; document.getElementById('loteProducto').value = ''; document.getElementById('proveedorProducto').value = ''; document.getElementById('fechaVencimiento').value = '';
+            document.querySelectorAll('.custom-autocomplete').forEach(ul => ul.classList.remove('active')); idProductoEnEdicion = null;
+            document.getElementById('formTitleProd').innerHTML = '<span class="material-symbols-rounded">add_circle</span> Nuevo Registro'; 
+            document.getElementById('btnGuardarProd').innerHTML = '<span class="material-symbols-rounded">cloud_upload</span> Guardar'; 
+            document.getElementById('btnGuardarProd').style.backgroundColor = 'var(--primary)'; 
+            document.getElementById('btnCancelarProd').style.display = 'none'; 
+            document.getElementById('formCardProd').classList.remove('editing-mode');
+        }
+
+        function cancelarEdicionProd() { limpiarFormularioProd(); }
+        
+        // INICIAR TODO
+        verificarSesionFirebase();
+        if(window.innerWidth < 768) switchTab('inventario');
+    </script>
+</body>
+</html>

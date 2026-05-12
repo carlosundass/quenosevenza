@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportes - Que No Se Venza</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,500,0,0" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- FIREBASE SCRIPTS -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="firebase-config.js"></script>
+
+    <style>
+        :root { --primary: #4F46E5; --primary-hover: #4338CA; --bg-color: #F3F4F6; --card-bg: #FFFFFF; --text-main: #1F2937; --text-muted: #6B7280; --danger: #EF4444; --warning: #F59E0B; --success: #10B981; --info: #3B82F6; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); }
+        .app-container { max-width: 1100px; margin: 0 auto; padding: 20px; min-height: 100vh; display: flex; flex-direction: column; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 2px solid #E5E7EB; padding-bottom: 15px; flex-wrap: wrap; gap: 10px;}
+        header h1 { font-size: 22px; color: var(--primary); font-weight: 700; display: flex; align-items: center; gap: 8px;}
+        header img { height: 40px; object-fit: contain; }
+        .header-actions { display: flex; gap: 10px; flex-wrap: wrap;}
+        .btn-header { background: white; border: 1px solid #E5E7EB; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .btn-header:hover { background: #E5E7EB; }
+        .btn-excel { background-color: #10B981; color: white; border: none; }
+        .btn-excel:hover { background-color: #059669; }
+        .filter-card { background: var(--card-bg); padding: 20px; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 25px; display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap; }
+        .filter-group { flex: 1; min-width: 150px; }
+        .filter-group label { display: block; font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; padding-left: 10px; }
+        .filter-group input, .filter-group select { width: 100%; padding: 12px 16px; border: 2px solid #E5E7EB; border-radius: 20px; font-size: 14px; outline: none; background: #F9FAFB; transition: border-color 0.3s; }
+        .filter-group input:focus, .filter-group select:focus { border-color: var(--primary); background: white; }
+        .btn-submit { background-color: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background-color 0.3s; height: 45px; display: flex; justify-content: center; align-items: center; gap: 6px;}
+        .btn-submit:hover { background-color: var(--primary-hover); }
+        .btn-clear { background-color: #F3F4F6; color: var(--text-main); }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .kpi-card { background: var(--card-bg); padding: 20px; border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); display: flex; align-items: center; gap: 15px; border-left: 5px solid var(--primary); cursor: pointer; transition: 0.2s;}
+        .kpi-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.08); }
+        .kpi-card.active { border-top: 2px solid var(--primary); background: #EEF2FF;}
+        .kpi-card.kpi-warning { border-left-color: var(--warning); }
+        .kpi-card.kpi-success { border-left-color: var(--success); }
+        .kpi-card.kpi-danger { border-left-color: var(--danger); }
+        .kpi-icon { font-size: 30px; background: #F3F4F6; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; color: var(--primary); }
+        .kpi-card.kpi-warning .kpi-icon { background: #FEF3C7; color: var(--warning); }
+        .kpi-card.kpi-success .kpi-icon { background: #D1FAE5; color: var(--success); }
+        .kpi-card.kpi-danger .kpi-icon { background: #FEE2E2; color: var(--danger); }
+        .kpi-info { display: flex; flex-direction: column; }
+        .kpi-value { font-size: 24px; font-weight: 700; color: var(--text-main); line-height: 1.2; }
+        .kpi-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;}
+        .reports-grid { display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 30px; }
+        @media (min-width: 850px) { .reports-grid { grid-template-columns: 1fr 1fr; } .full-width { grid-column: 1 / -1; } }
+        .report-card { background: var(--card-bg); padding: 24px; border-radius: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); display: flex; flex-direction: column; }
+        .report-title { font-size: 16px; font-weight: 600; margin-bottom: 20px; color: var(--text-main); text-align: center; display: flex; flex-direction: column; gap: 4px;}
+        .chart-container { position: relative; height: 260px; width: 100%; }
+        .split-card { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        @media (min-width: 850px) { .split-card { grid-template-columns: 1fr 1fr; } }
+        .summary-list { list-style: none; overflow-y: auto; max-height: 260px; padding-right: 10px; }
+        .summary-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #F3F4F6; font-size: 13px; }
+        .summary-item:last-child { border-bottom: none; }
+        .summary-name { font-weight: 500; display: flex; flex-direction: column; }
+        .summary-brand { font-size: 11px; color: var(--text-muted); }
+        .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        .dot-rojo { background-color: var(--danger); } .dot-amarillo { background-color: var(--warning); } .dot-verde { background-color: var(--success); }
+        .lote-list { list-style: none; margin-top: 15px; max-height: 300px; overflow-y: auto; padding-right: 10px;}
+        .lote-item { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #E5E7EB; font-size: 14px; align-items: center;}
+        .empty-message { text-align: center; color: var(--text-muted); padding: 40px 20px; grid-column: 1 / -1; background: white; border-radius: 20px; border: 2px dashed #E5E7EB;}
+        .global-announcement { background: #FEF3C7; color: #92400E; border: 1px solid #F59E0B; padding: 12px 20px; border-radius: 12px; margin-bottom: 20px; font-size: 14px; font-weight: 600; display: none; align-items: center; gap: 10px;}
+        .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: white; border-radius: 12px; padding: 16px 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 12px; transform: translateX(120%); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); font-size: 14px; font-weight: 500;}
+        .toast.show { transform: translateX(0); }
+        .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 3000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body>
+    <div id="toastContainer" class="toast-container"></div>
+
+    <div id="loadingOverlay" class="loading-overlay">
+        <span class="material-symbols-rounded" style="font-size: 48px; color: var(--primary); animation: spin 1s linear infinite;">sync</span>
+        <p style="margin-top: 15px; font-weight: 600; color: var(--text-muted);">Generando reportes desde la nube...</p>
+    </div>
+    <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
+
+    <div class="app-container" id="mainApp" style="display:none;">
+        <div id="anuncioGlobal" class="global-announcement"></div>
+        <header>
+            <h1 id="nombreLocalDisplay">
+                <img src="img/logo.png" alt="Logo" onerror="this.style.display='none'">
+                Dashboard
+            </h1>
+            <div class="header-actions">
+                <button class="btn-header btn-excel" onclick="exportarAExcel()">
+                    <span class="material-symbols-rounded">download</span> Exportar CSV
+                </button>
+                <button class="btn-header" onclick="window.location.href='/'"><span class="material-symbols-rounded">arrow_back</span> Volver</button>
+            </div>
+        </header>
+
+        <div class="filter-card">
+            <div class="filter-group">
+                <label>Desde (Fecha)</label>
+                <input type="date" id="filtroDesde" onclick="this.showPicker()" onkeydown="if(event.key === 'Enter') aplicarFiltros()">
+            </div>
+            <div class="filter-group">
+                <label>Hasta (Fecha)</label>
+                <input type="date" id="filtroHasta" onclick="this.showPicker()" onkeydown="if(event.key === 'Enter') aplicarFiltros()">
+            </div>
+            <div class="filter-group">
+                <label>Marca</label>
+                <select id="filtroMarca" onkeydown="if(event.key === 'Enter') aplicarFiltros()"><option value="">Todas</option></select>
+            </div>
+            <div class="filter-group">
+                <label>Proveedor</label>
+                <select id="filtroProveedor" onkeydown="if(event.key === 'Enter') aplicarFiltros()"><option value="">Todos</option></select>
+            </div>
+            <button class="btn-submit" onclick="aplicarFiltros()"><span class="material-symbols-rounded">filter_alt</span> Filtrar</button>
+            <button class="btn-submit btn-clear" onclick="limpiarFiltros()"><span class="material-symbols-rounded">backspace</span> Limpiar</button>
+        </div>
+
+        <div class="kpi-grid" id="kpiContainer">
+            <div class="kpi-card active" id="card-activos" onclick="cambiarFiltroRapido('activos')"><div class="kpi-icon"><span class="material-symbols-rounded">inventory_2</span></div><div class="kpi-info"><span class="kpi-value" id="kpiActivos">0</span><span class="kpi-label">Stock Activo</span></div></div>
+            <div class="kpi-card kpi-warning" id="card-riesgo" onclick="cambiarFiltroRapido('riesgo')"><div class="kpi-icon"><span class="material-symbols-rounded">warning</span></div><div class="kpi-info"><span class="kpi-value" id="kpiRiesgo">0</span><span class="kpi-label">En Riesgo (<7 Días)</span></div></div>
+            <div class="kpi-card kpi-success" id="card-salvados" onclick="cambiarFiltroRapido('salvados')"><div class="kpi-icon"><span class="material-symbols-rounded">check_circle</span></div><div class="kpi-info"><span class="kpi-value" id="kpiVendidos">0</span><span class="kpi-label">Salvados</span></div></div>
+            <div class="kpi-card kpi-danger" id="card-mermas" onclick="cambiarFiltroRapido('mermas')"><div class="kpi-icon"><span class="material-symbols-rounded">delete</span></div><div class="kpi-info"><span class="kpi-value" id="kpiMermas">0</span><span class="kpi-label">Total Mermas</span></div></div>
+        </div>
+
+        <div class="reports-grid" id="contenedorReportes">
+            <div class="report-card full-width split-card">
+                <div><h3 class="report-title" style="text-align: left;">Estado de la Vista Actual</h3><div class="chart-container"><canvas id="estadoChart"></canvas></div></div>
+                <div><h3 class="report-title" style="text-align: left;">Productos al Detalle</h3><ul class="summary-list" id="listaResumenVencimientos"></ul></div>
+            </div>
+            <div class="report-card"><h3 class="report-title">Histórico de Salidas</h3><div class="chart-container"><canvas id="salidasChart"></canvas></div></div>
+            <div class="report-card"><h3 class="report-title">Marcas Principales</h3><div class="chart-container"><canvas id="marcaChart"></canvas></div></div>
+            <div class="report-card"><h3 class="report-title">Distribución de Proveedores</h3><div class="chart-container"><canvas id="proveedorChart"></canvas></div></div>
+            <div class="report-card full-width"><h3 class="report-title" style="text-align: left;">Monitor de Lotes</h3><ul class="lote-list" id="listaLotes"></ul></div>
+        </div>
+    </div>
+
+    <script>
+        function showToast(msj, tipo = 'success') {
+            const container = document.getElementById('toastContainer'); const toast = document.createElement('div'); toast.className = `toast`;
+            let icon = tipo === 'success' ? 'check_circle' : (tipo === 'error' ? 'error' : 'warning'); let color = `var(--${tipo})`;
+            toast.innerHTML = `<span class="material-symbols-rounded" style="color: ${color}">${icon}</span> <span style="color: var(--text-main)">${msj}</span>`;
+            toast.style.borderLeft = `4px solid ${color}`; container.appendChild(toast);
+            setTimeout(() => toast.classList.add('show'), 10); setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3500);
+        }
+
+        let clienteActual = null; let chartEstado, chartSalidas, chartMarca, chartProveedor; 
+        let modoVista = 'activos'; let datosExportar = [];
+        let productosGlobales = []; let historialGlobal = [];
+
+        function verificarSesionFirebase() {
+            const idSesion = localStorage.getItem('sesionActual');
+            if (!idSesion) { window.location.href = '/login.html'; return; }
+            
+            // SEGURIDAD: Vendedor no entra aquí
+            if(localStorage.getItem('rolUsuario') === 'vendedor') { window.location.href = '/'; return; }
+
+            db.collection('clientes').doc(String(idSesion)).get().then(doc => {
+                if(!doc.exists || !doc.data().activo) { window.location.href = '/login.html'; return; }
+                clienteActual = doc.data();
+                document.getElementById('nombreLocalDisplay').innerHTML = `<img src="img/logo.png" alt="Logo" onerror="this.style.display='none'"> Dashboard - ${clienteActual.nombre}`;
+                
+                cargarDatosNube(); // Descarga masiva para el reporte
+            });
+
+            const anuncio = localStorage.getItem('anuncioMaster');
+            if (anuncio) { const b = document.getElementById('anuncioGlobal'); b.innerHTML = `<span class="material-symbols-rounded">campaign</span> ${anuncio}`; b.style.display = 'flex'; }
+        }
+
+        async function cargarDatosNube() {
+            try {
+                // Descargar Inventario Activo
+                const pSnap = await db.collection('clientes').doc(String(clienteActual.id)).collection('productos').get();
+                pSnap.forEach(doc => productosGlobales.push(doc.data()));
+
+                // Descargar Historial
+                const hSnap = await db.collection('clientes').doc(String(clienteActual.id)).collection('historial').get();
+                hSnap.forEach(doc => historialGlobal.push(doc.data()));
+
+                document.getElementById('loadingOverlay').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'flex';
+
+                poblarSelectsNube();
+                cargarReportes();
+
+            } catch (e) {
+                showToast("Error al cargar datos desde la nube.", "error");
+            }
+        }
+
+        function poblarSelectsNube() {
+            let cat = clienteActual.catalogos || { nombres: [], marcas: [], proveedores: [] };
+            const sM = document.getElementById('filtroMarca'); const sP = document.getElementById('filtroProveedor');
+            cat.marcas.forEach(m => sM.innerHTML += `<option value="${m}">${m}</option>`);
+            cat.proveedores.forEach(p => sP.innerHTML += `<option value="${p}">${p}</option>`);
+        }
+
+        function cambiarFiltroRapido(modo) { modoVista = modo; document.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('active')); document.getElementById(`card-${modo}`).classList.add('active'); cargarReportes(); }
+        function aplicarFiltros() { cargarReportes(); }
+        function limpiarFiltros() { document.getElementById('filtroDesde').value = ''; document.getElementById('filtroHasta').value = ''; document.getElementById('filtroMarca').value = ''; document.getElementById('filtroProveedor').value = ''; cambiarFiltroRapido('activos'); }
+
+        function cargarReportes() {
+            const hoy = new Date(); hoy.setHours(0,0,0,0);
+
+            document.getElementById('kpiActivos').innerText = productosGlobales.length;
+            document.getElementById('kpiRiesgo').innerText = productosGlobales.filter(p => Math.ceil((new Date(p.fecha + 'T00:00:00') - hoy) / 86400000) <= 7).length;
+            document.getElementById('kpiVendidos').innerText = historialGlobal.filter(h => h.motivoSalida !== 'Merma').length;
+            document.getElementById('kpiMermas').innerText = historialGlobal.filter(h => h.motivoSalida === 'Merma').length;
+
+            let datosBase = [];
+            if (modoVista === 'activos') datosBase = productosGlobales;
+            if (modoVista === 'riesgo') datosBase = productosGlobales.filter(p => Math.ceil((new Date(p.fecha + 'T00:00:00') - hoy) / 86400000) <= 7);
+            if (modoVista === 'salvados') datosBase = historialGlobal.filter(h => h.motivoSalida !== 'Merma');
+            if (modoVista === 'mermas') datosBase = historialGlobal.filter(h => h.motivoSalida === 'Merma');
+
+            const desde = document.getElementById('filtroDesde').value; const hasta = document.getElementById('filtroHasta').value; const marca = document.getElementById('filtroMarca').value; const prov = document.getElementById('filtroProveedor').value;
+            if (desde) datosBase = datosBase.filter(p => new Date((p.fechaSalida || p.fecha)) >= new Date(desde + 'T00:00:00'));
+            if (hasta) datosBase = datosBase.filter(p => new Date((p.fechaSalida || p.fecha)) <= new Date(hasta + 'T23:59:59'));
+            if (marca) datosBase = datosBase.filter(p => p.marca === marca);
+            if (prov) datosBase = datosBase.filter(p => p.proveedor === prov);
+            datosExportar = datosBase;
+
+            if(datosBase.length === 0) { document.getElementById('contenedorReportes').innerHTML = `<div class="empty-message">📉 No hay datos que coincidan con estos filtros.</div>`; return; } 
+            else { document.getElementById('contenedorReportes').style.display = 'grid'; if(document.getElementById('contenedorReportes').innerHTML.includes('empty-message')) location.reload(); }
+
+            generarGraficoEstadoYResumen(datosBase); generarGraficoSalidas(historialGlobal); generarGraficoMarcas(datosBase); generarGraficoProveedores(datosBase); generarListaLotes(datosBase);
+        }
+
+        function exportarAExcel() {
+            if (datosExportar.length === 0) return showToast("No hay datos para exportar.", "warning");
+            let csvContent = "Estado;Producto;Marca;Lote;Proveedor;Fecha;Motivo Salida\n";
+            datosExportar.forEach(p => { csvContent += `${p.motivoSalida ? 'SALIDA' : 'ACTIVO'};${p.nombre};${p.marca || ''};${p.lote || ''};${p.proveedor || ''};${p.fecha};${p.motivoSalida || 'En Stock'}\n`; });
+            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `Reporte_${modoVista}_${clienteActual.nombre.replace(/\s+/g, '_')}.csv`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+
+        function generarGraficoEstadoYResumen(productos) {
+            let verdes = 0, amarillos = 0, rojos = 0; const hoy = new Date(); hoy.setHours(0,0,0,0);
+            const listaHtml = document.getElementById('listaResumenVencimientos'); listaHtml.innerHTML = '';
+            [...productos].sort((a,b) => new Date(a.fecha) - new Date(b.fecha)).forEach(p => {
+                const dias = Math.ceil((new Date(p.fecha + 'T00:00:00').getTime() - hoy.getTime()) / (1000 * 3600 * 24));
+                let c = '', t = '';
+                if (dias <= 3 || p.motivoSalida === 'Merma') { rojos++; c = 'dot-rojo'; t = p.motivoSalida || (dias <= 0 ? 'Vencido' : `En ${dias} d`); } else if (dias <= 7) { amarillos++; c = 'dot-amarillo'; t = p.motivoSalida || `En ${dias} d`; } else { verdes++; c = 'dot-verde'; t = p.motivoSalida || p.fecha; }
+                const li = document.createElement('li'); li.className = 'summary-item'; li.innerHTML = `<div style="display:flex;align-items:center;"><span class="dot ${c}"></span><div class="summary-name">${p.nombre}<span class="summary-brand">${p.marca || ''}</span></div></div><strong>${t}</strong>`; listaHtml.appendChild(li);
+            });
+            if(chartEstado) chartEstado.destroy(); chartEstado = new Chart(document.getElementById('estadoChart').getContext('2d'), { type: 'doughnut', data: { labels: ['Ok/Salvado', 'Pronto', 'Crítico/Merma'], datasets: [{ data: [verdes, amarillos, rojos], backgroundColor: ['#10B981', '#F59E0B', '#EF4444'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, cutout: '65%' } });
+        }
+
+        function generarGraficoSalidas(historial) {
+            const conteo = { 'Consumido': 0, 'Merma': 0, 'Devolución': 0, 'Donación': 0 }; historial.forEach(h => { if(conteo[h.motivoSalida] !== undefined) conteo[h.motivoSalida]++; });
+            if(chartSalidas) chartSalidas.destroy(); chartSalidas = new Chart(document.getElementById('salidasChart').getContext('2d'), { type: 'bar', data: { labels: ['Consumido', 'Merma', 'Devuelto', 'Donado'], datasets: [{ data: [conteo['Consumido'], conteo['Merma'], conteo['Devolución'], conteo['Donación']], backgroundColor: ['#10B981', '#EF4444', '#F59E0B', '#3B82F6'], borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+        }
+
+        function generarGraficoMarcas(productos) {
+            const conteo = {}; productos.forEach(p => { if(p.marca) conteo[p.marca] = (conteo[p.marca] || 0) + 1; });
+            const marcas = Object.entries(conteo).sort((a,b) => b[1]-a[1]).slice(0,5);
+            if(chartMarca) chartMarca.destroy(); chartMarca = new Chart(document.getElementById('marcaChart').getContext('2d'), { type: 'bar', data: { labels: marcas.map(m=>m[0]), datasets: [{ data: marcas.map(m=>m[1]), backgroundColor: '#8B5CF6' }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+        }
+
+        function generarGraficoProveedores(productos) {
+            const conteo = {}; productos.forEach(p => { if(p.proveedor) conteo[p.proveedor] = (conteo[p.proveedor] || 0) + 1; });
+            if(chartProveedor) chartProveedor.destroy(); chartProveedor = new Chart(document.getElementById('proveedorChart').getContext('2d'), { type: 'pie', data: { labels: Object.keys(conteo), datasets: [{ data: Object.values(conteo), backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } } });
+        }
+
+        function generarListaLotes(productos) {
+            const lista = document.getElementById('listaLotes'); lista.innerHTML = '';
+            const conLote = productos.filter(p => p.lote && p.lote.trim() !== ''); if(conLote.length === 0) return lista.innerHTML = '<li class="lote-item" style="justify-content:center; color:#6B7280;">Sin lotes registrados.</li>';
+            const agrupados = {}; conLote.forEach(p => { if(!agrupados[p.lote]) agrupados[p.lote] = []; agrupados[p.lote].push(`${p.nombre} (${p.marca || ''})`); });
+            for (const [lote, items] of Object.entries(agrupados)) { lista.innerHTML += `<li class="lote-item"><div><span class="lote-name">${[...new Set(items)].join(', ')}</span></div><span class="lote-badge">Lote: ${lote}</span></li>`; }
+        }
+
+        verificarSesionFirebase();
+    </script>
+</body>
+</html>

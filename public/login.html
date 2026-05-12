@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Que No Se Venza</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,500,0,0" rel="stylesheet" />
+    
+    <!-- FIREBASE SCRIPTS -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="firebase-config.js"></script>
+
+    <style>
+        :root { --primary: #4F46E5; --primary-hover: #4338CA; --bg-color: #F3F4F6; --card-bg: #FFFFFF; --text-main: #1F2937; --text-muted: #6B7280; --danger: #EF4444; --success: #10B981; --warning: #F59E0B;}
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+        .login-card { background: var(--card-bg); padding: 40px 30px; border-radius: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 400px; text-align: center; }
+        .login-card img { height: 70px; object-fit: contain; margin-bottom: 15px; }
+        .login-card h1 { color: var(--primary); font-size: 22px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; gap: 8px;}
+        .login-card p { color: var(--text-muted); font-size: 14px; margin-bottom: 30px; }
+        .input-group { margin-bottom: 20px; text-align: left; }
+        .input-group label { display: block; font-size: 14px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; padding-left: 10px; }
+        .input-group input { width: 100%; padding: 14px 20px; border: 2px solid #E5E7EB; border-radius: 30px; font-size: 15px; outline: none; transition: border-color 0.3s; }
+        .input-group input:focus { border-color: var(--primary); }
+        .btn-submit { width: 100%; background-color: var(--primary); color: white; border: none; padding: 16px; border-radius: 30px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background-color 0.3s; margin-top: 10px; display: flex; justify-content: center; align-items: center; gap: 8px; }
+        .btn-submit:hover { background-color: var(--primary-hover); }
+        .btn-submit:disabled { background-color: #9CA3AF; cursor: not-allowed; }
+        .footer { text-align: center; color: var(--text-muted); font-size: 12px; margin-top: 30px; }
+        .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: white; border-radius: 12px; padding: 16px 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 12px; transform: translateX(120%); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); font-size: 14px; font-weight: 500;}
+        .toast.show { transform: translateX(0); }
+    </style>
+</head>
+<body>
+    <div id="toastContainer" class="toast-container"></div>
+
+    <div class="login-card">
+        <img src="img/logo.png" alt="Logo" onerror="this.style.display='none'">
+        <h1>Que No Se Venza</h1>
+        <p>Ingresa al panel de tu negocio</p>
+        <div class="input-group">
+            <label for="email">Correo electrónico</label>
+            <input type="email" id="email" placeholder="contacto@almacen.cl" required onkeydown="if(event.key === 'Enter') iniciarSesion()">
+        </div>
+        <div class="input-group">
+            <label for="password">Contraseña (PIN)</label>
+            <input type="password" id="password" placeholder="••••••••" required onkeydown="if(event.key === 'Enter') iniciarSesion()">
+        </div>
+        <button class="btn-submit" id="btnIngresar" onclick="iniciarSesion()">
+            Ingresar <span class="material-symbols-rounded">login</span>
+        </button>
+    </div>
+    <p class="footer">Desarrollado por Carlos</p>
+
+    <script>
+        function showToast(msj, tipo = 'success') {
+            const container = document.getElementById('toastContainer'); const toast = document.createElement('div'); toast.className = `toast`;
+            let icon = tipo === 'success' ? 'check_circle' : (tipo === 'error' ? 'error' : 'warning'); let color = `var(--${tipo})`;
+            toast.innerHTML = `<span class="material-symbols-rounded" style="color: ${color}">${icon}</span> <span style="color: var(--text-main)">${msj}</span>`;
+            toast.style.borderLeft = `4px solid ${color}`; container.appendChild(toast);
+            setTimeout(() => toast.classList.add('show'), 10); setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3500);
+        }
+
+        async function iniciarSesion() {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const btn = document.getElementById('btnIngresar');
+
+            if (!email || !password) {
+                return showToast('Ingresa tu correo y contraseña.', 'warning');
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = `<span class="material-symbols-rounded">hourglass_empty</span> Verificando...`;
+
+            try {
+                // 1. VERIFICACIÓN DE SEGURIDAD MÁXIMA (ADMIN MASTER)
+                const adminDoc = await db.collection('sistema').doc('admin').get();
+                if (adminDoc.exists) {
+                    const adminData = adminDoc.data();
+                    if (email === adminData.correo && password === adminData.clave) {
+                        localStorage.setItem('sesionActual', 'ADMIN_MASTER');
+                        window.location.href = '/admin.html'; 
+                        return;
+                    }
+                }
+
+                // 2. SI NO ES ADMIN MASTER, VERIFICAR SI ES UN ALMACÉN
+                const snapshot = await db.collection('clientes').where('correo', '==', email).get();
+                
+                if (snapshot.empty) {
+                    showToast('Correo no registrado en el sistema o credenciales incorrectas.', 'error');
+                    btn.disabled = false; btn.innerHTML = `Ingresar <span class="material-symbols-rounded">login</span>`;
+                    return;
+                }
+
+                let clienteValido = null;
+                snapshot.forEach(doc => { clienteValido = doc.data(); });
+
+                if (!clienteValido.activo) {
+                    showToast('Tu cuenta está suspendida. Redirigiendo...', 'error');
+                    setTimeout(() => window.location.href = '/pago.html', 2000);
+                    return;
+                }
+
+                if (password === clienteValido.clave) {
+                    localStorage.setItem('sesionActual', clienteValido.id);
+                    localStorage.setItem('rolUsuario', 'admin');
+                    window.location.href = '/';
+                } else if (password === clienteValido.claveVendedor) {
+                    localStorage.setItem('sesionActual', clienteValido.id);
+                    localStorage.setItem('rolUsuario', 'vendedor');
+                    window.location.href = '/';
+                } else { 
+                    showToast('La contraseña o PIN es incorrecto.', 'error'); 
+                    btn.disabled = false; btn.innerHTML = `Ingresar <span class="material-symbols-rounded">login</span>`;
+                }
+            } catch (error) {
+                console.error(error);
+                showToast("Error de conexión a la base de datos.", "error");
+                btn.disabled = false; btn.innerHTML = `Ingresar <span class="material-symbols-rounded">login</span>`;
+            }
+        }
+    </script>
+</body>
+</html>
