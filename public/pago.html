@@ -11,6 +11,9 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="firebase-config.js"></script>
+    
+    <!-- SDK DE MERCADO PAGO -->
+    <script src="https://sdk.mercadopago.com/js/v2"></script>
 
     <style>
         :root { --primary: #4F46E5; --primary-hover: #4338CA; --bg-color: #F3F4F6; --card-bg: #FFFFFF; --text-main: #1F2937; --text-muted: #6B7280; --success: #10B981; --warning: #F59E0B; --danger: #EF4444; }
@@ -40,6 +43,8 @@
         .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
         .toast { background: white; border-radius: 12px; padding: 16px 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 12px; transform: translateX(120%); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); font-size: 14px; font-weight: 500;}
         .toast.show { transform: translateX(0); }
+        /* Oculta los elementos de desarrollador por defecto */
+        .cho-container { display: none; }
     </style>
 </head>
 <body>
@@ -50,6 +55,7 @@
         <h1>Portal de Pago</h1>
         <p>Sistema de gestión de inventarios</p>
 
+        <!-- Vista 1: Login por correo -->
         <div id="loginPagoView">
             <p style="margin-bottom: 20px;">Ingresa el correo de tu almacén para buscar tu mensualidad pendiente.</p>
             <div class="input-group">
@@ -64,6 +70,7 @@
             </button>
         </div>
 
+        <!-- Vista 2: Detalle de la boleta -->
         <div id="detallePagoView">
             <div class="ticket">
                 <div class="ticket-row">
@@ -76,15 +83,17 @@
                 </div>
                 <div class="ticket-total">
                     <span>Total a Pagar:</span>
-                    <span>$15.000</span>
+                    <span>$15.000 CLP</span>
                 </div>
             </div>
             
             <div id="mensajeEstadoPago"></div>
             
-            <button id="btnRealizarPago" class="btn-submit btn-success" onclick="simularPago()">
-                <span class="material-symbols-rounded">lock</span> Pago Seguro
+            <button id="btnRealizarPago" class="btn-submit btn-success" onclick="iniciarPagoMP()">
+                <span class="material-symbols-rounded">lock</span> Pago Seguro (Mercado Pago)
             </button>
+            <div class="cho-container"></div>
+            
             <button class="btn-cancel" onclick="volverAInicio()">Volver</button>
         </div>
     </div>
@@ -100,7 +109,13 @@
             setTimeout(() => toast.classList.add('show'), 10); setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3500);
         }
 
-        let clienteEncontrado = null; let fueBuscadoPorCorreo = false; 
+        // Inicializamos Mercado Pago con tu Llave Pública de Prueba
+        const mp = new MercadoPago('TEST-14622975-139f-43db-9d2b-cb2210a60b32', {
+            locale: 'es-CL'
+        });
+
+        let clienteEncontrado = null; 
+        let fueBuscadoPorCorreo = false; 
         
         async function iniciarPortal() {
             const idSesion = localStorage.getItem('sesionActual');
@@ -113,7 +128,7 @@
                         return;
                     }
                 } catch(e) {
-                    console.log("Error buscando sesión en Firebase.");
+                    console.log("Error buscando sesión.");
                 }
             }
             document.getElementById('loginPagoView').style.display = 'block';
@@ -166,35 +181,35 @@
             document.getElementById('detallePagoView').style.display = 'block';
         }
 
-        async function simularPago() {
+        // ESTA ES LA FUNCIÓN NUEVA QUE LLAMA AL SERVIDOR
+        async function iniciarPagoMP() {
             const btn = document.getElementById('btnRealizarPago');
-            btn.disabled = true; btn.innerHTML = `<span class="material-symbols-rounded">sync</span> Procesando...`;
+            btn.disabled = true;
+            btn.innerHTML = `<span class="material-symbols-rounded">sync</span> Conectando a Mercado Pago...`;
 
             try {
-                const estabaSuspendido = !clienteEncontrado.activo;
-                let [y, m, d] = clienteEncontrado.fechaPago.split('-'); let mesNumerico = parseInt(m) - 1; let anioNumerico = parseInt(y);
-                mesNumerico++; if (mesNumerico > 11) { mesNumerico = 0; anioNumerico++; }
-                let nuevaFecha = new Date(anioNumerico, mesNumerico, clienteEncontrado.diaCobro);
-                if (nuevaFecha.getMonth() !== mesNumerico) { nuevaFecha = new Date(anioNumerico, mesNumerico + 1, 0); }
-                const yyyy = nuevaFecha.getFullYear(); const mm = String(nuevaFecha.getMonth() + 1).padStart(2, '0'); const dd = String(nuevaFecha.getDate()).padStart(2, '0');
-                
-                const nuevaFechaStr = `${yyyy}-${mm}-${dd}`;
-
-                // ACTUALIZAR EN FIREBASE
-                await db.collection('clientes').doc(String(clienteEncontrado.id)).update({
-                    fechaPago: nuevaFechaStr,
-                    activo: true
+                // Le pedimos al servidor (server.js) que cree la orden de cobro
+                const response = await fetch('/create_preference', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        idCliente: clienteEncontrado.id,
+                        nombreLocal: clienteEncontrado.nombre
+                    })
                 });
-                
-                showToast('¡Pago procesado con éxito!', 'success');
-                setTimeout(() => {
-                    if (estabaSuspendido || fueBuscadoPorCorreo) {
-                        localStorage.removeItem('sesionActual'); window.location.href = '/login.html'; 
-                    } else { window.location.href = '/'; }
-                }, 2000);
-            } catch(e) {
-                showToast("Hubo un error al procesar el pago.", "error");
-                btn.disabled = false; btn.innerHTML = `<span class="material-symbols-rounded">lock</span> Pago Seguro`;
+
+                const preference = await response.json();
+
+                // Abrimos el Checkout flotante de Mercado Pago
+                mp.checkout({
+                    preference: { id: preference.id },
+                    autoOpen: true 
+                });
+
+            } catch (e) {
+                showToast("Error al iniciar el pago.", "error");
+                btn.disabled = false;
+                btn.innerHTML = `<span class="material-symbols-rounded">lock</span> Pago Seguro (Mercado Pago)`;
             }
         }
 
@@ -203,24 +218,16 @@
         }
         
         iniciarPortal();
+        
+        // Anti curiosos visuales
+        document.addEventListener('contextmenu', event => event.preventDefault());
+        document.onkeydown = function(e) {
+            if(e.keyCode == 123) { return false; }
+            if(e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) { return false; }
+            if(e.ctrlKey && e.shiftKey && e.keyCode == 'C'.charCodeAt(0)) { return false; }
+            if(e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)) { return false; }
+            if(e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) { return false; }
+        }
     </script>
-    <script>
-    // Bloquear clic derecho
-    document.addEventListener('contextmenu', event => event.preventDefault());
-
-    // Bloquear teclas de herramientas de desarrollador
-    document.onkeydown = function(e) {
-        // Bloquear F12
-        if(e.keyCode == 123) { return false; }
-        // Bloquear Ctrl+Shift+I (Inspeccionar)
-        if(e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) { return false; }
-        // Bloquear Ctrl+Shift+C (Inspeccionar elemento)
-        if(e.ctrlKey && e.shiftKey && e.keyCode == 'C'.charCodeAt(0)) { return false; }
-        // Bloquear Ctrl+Shift+J (Consola)
-        if(e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)) { return false; }
-        // Bloquear Ctrl+U (Ver código fuente)
-        if(e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) { return false; }
-    }
-</script>
 </body>
 </html>
