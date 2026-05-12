@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const { MercadoPagoConfig, Preapproval, Payment } = require('mercadopago'); // Importamos Preapproval para suscripciones
+const { MercadoPagoConfig, Preapproval, Payment } = require('mercadopago');
 const admin = require('firebase-admin');
 
 const app = express();
@@ -22,7 +22,6 @@ const client = new MercadoPagoConfig({
 
 app.use(express.json());
 
-// Desactiva el caché para evitar problemas de navegación
 app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
     next();
@@ -30,11 +29,21 @@ app.use((req, res, next) => {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// RUTA PARA CREAR LA SUSCRIPCIÓN AUTOMÁTICA
+// RUTA PARA CREAR LA SUSCRIPCIÓN AUTOMÁTICA CON PRECIO DINÁMICO
 app.post('/create_subscription', async (req, res) => {
     const { idCliente, correo, nombreLocal } = req.body;
     
-    // Instanciamos el plan de suscripción
+    // Buscar el precio definido en el panel de administrador
+    let precioSuscripcion = 15000; // Precio por defecto en caso de que falle
+    try {
+        const configDoc = await db.collection('sistema').doc('configuracion').get();
+        if (configDoc.exists && configDoc.data().precioMensualidad) {
+            precioSuscripcion = Number(configDoc.data().precioMensualidad);
+        }
+    } catch (e) {
+        console.error("No se pudo leer el precio, usando defecto.");
+    }
+    
     const preapproval = new Preapproval(client);
 
     try {
@@ -43,18 +52,17 @@ app.post('/create_subscription', async (req, res) => {
                 reason: `Mensualidad Que No Se Venza - ${nombreLocal}`,
                 auto_recurring: {
                     frequency: 1,
-                    frequency_type: "months", // Se cobra cada 1 mes exacto
-                    transaction_amount: 15000,
+                    frequency_type: "months",
+                    transaction_amount: precioSuscripcion, // ACÁ SE APLICA EL PRECIO DINÁMICO
                     currency_id: "CLP"
                 },
                 payer_email: correo,
                 back_url: "https://quenosevenza.onrender.com/pago.html",
-                external_reference: String(idCliente), // ID del cliente para que el Webhook lo reconozca
+                external_reference: String(idCliente),
                 status: "pending"
             }
         });
         
-        // Devolvemos el link seguro de Mercado Pago donde el cliente pondrá su tarjeta
         res.json({ init_point: response.init_point });
     } catch (error) {
         console.error("Error al crear suscripción:", error);
@@ -62,7 +70,7 @@ app.post('/create_subscription', async (req, res) => {
     }
 });
 
-// WEBHOOK: La oreja que escucha cuando los pagos recurrentes se aprueban
+// WEBHOOK (Se mantiene igual)
 app.post('/webhook', async (req, res) => {
     const { query } = req;
     const topic = query.topic || query.type;
@@ -81,7 +89,7 @@ app.post('/webhook', async (req, res) => {
                 if (doc.exists) {
                     const datos = doc.data();
                     let [y, m, d] = datos.fechaPago.split('-');
-                    let nuevaF = new Date(y, parseInt(m), d); // Suma un mes automáticamente
+                    let nuevaF = new Date(y, parseInt(m), d); 
                     const nStr = `${nuevaF.getFullYear()}-${String(nuevaF.getMonth()+1).padStart(2,'0')}-${String(nuevaF.getDate()).padStart(2,'0')}`;
 
                     await clienteRef.update({ fechaPago: nStr, activo: true });
@@ -93,7 +101,7 @@ app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
 });
 
-// Rutas fijas del sistema
+// Rutas fijas
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/login.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/admin.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
