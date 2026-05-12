@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const { MercadoPagoConfig, Preference, Payment } = require('mercadopago'); // Nuevo formato v2
+const { MercadoPagoConfig, Preapproval, Payment } = require('mercadopago'); // Importamos Preapproval para suscripciones
 const admin = require('firebase-admin');
 
 const app = express();
@@ -15,47 +15,54 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 
-// 2. NUEVA CONFIGURACIÓN MERCADO PAGO (v2)
+// 2. CONFIGURACIÓN MERCADO PAGO (v2)
 const client = new MercadoPagoConfig({ 
     accessToken: 'TEST-5629530076938828-051213-7d63b898d055daef6f20533412bae22f-248724686' 
 });
 
 app.use(express.json());
+
+// Desactiva el caché para evitar problemas de navegación
+app.use((req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
-// RUTA PARA CREAR EL PAGO
-app.post('/create_preference', async (req, res) => {
-    const { idCliente, nombreLocal } = req.body;
-    const preference = new Preference(client);
+// RUTA PARA CREAR LA SUSCRIPCIÓN AUTOMÁTICA
+app.post('/create_subscription', async (req, res) => {
+    const { idCliente, correo, nombreLocal } = req.body;
+    
+    // Instanciamos el plan de suscripción
+    const preapproval = new Preapproval(client);
 
     try {
-        const response = await preference.create({
+        const response = await preapproval.create({
             body: {
-                items: [
-                    {
-                        title: `Mensualidad Que No Se Venza - ${nombreLocal}`,
-                        unit_price: 15000,
-                        quantity: 1,
-                        currency_id: 'CLP'
-                    }
-                ],
-                external_reference: String(idCliente),
-                back_urls: {
-                    success: "https://quenosevenza.onrender.com/pago.html",
-                    failure: "https://quenosevenza.onrender.com/pago.html",
+                reason: `Mensualidad Que No Se Venza - ${nombreLocal}`,
+                auto_recurring: {
+                    frequency: 1,
+                    frequency_type: "months", // Se cobra cada 1 mes exacto
+                    transaction_amount: 15000,
+                    currency_id: "CLP"
                 },
-                auto_return: "approved",
-                notification_url: "https://quenosevenza.onrender.com/webhook", 
+                payer_email: correo,
+                back_url: "https://quenosevenza.onrender.com/pago.html",
+                external_reference: String(idCliente), // ID del cliente para que el Webhook lo reconozca
+                status: "pending"
             }
         });
-        res.json({ id: response.id });
+        
+        // Devolvemos el link seguro de Mercado Pago donde el cliente pondrá su tarjeta
+        res.json({ init_point: response.init_point });
     } catch (error) {
-        console.error("Error al crear preferencia:", error);
-        res.status(500).send("Error al crear la preferencia");
+        console.error("Error al crear suscripción:", error);
+        res.status(500).send("Error al crear la suscripción");
     }
 });
 
-// WEBHOOK ACTUALIZADO (v2)
+// WEBHOOK: La oreja que escucha cuando los pagos recurrentes se aprueban
 app.post('/webhook', async (req, res) => {
     const { query } = req;
     const topic = query.topic || query.type;
@@ -74,10 +81,11 @@ app.post('/webhook', async (req, res) => {
                 if (doc.exists) {
                     const datos = doc.data();
                     let [y, m, d] = datos.fechaPago.split('-');
-                    let nuevaF = new Date(y, parseInt(m), d);
+                    let nuevaF = new Date(y, parseInt(m), d); // Suma un mes automáticamente
                     const nStr = `${nuevaF.getFullYear()}-${String(nuevaF.getMonth()+1).padStart(2,'0')}-${String(nuevaF.getDate()).padStart(2,'0')}`;
 
                     await clienteRef.update({ fechaPago: nStr, activo: true });
+                    console.log(`✅ Mensualidad cobrada con éxito. Renovado: ${idCliente} hasta ${nStr}`);
                 }
             }
         } catch (e) { console.error("Error en Webhook:", e); }
@@ -85,11 +93,16 @@ app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
 });
 
-// Rutas fijas
+// Rutas fijas del sistema
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/login.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/admin.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/pago.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'pago.html')));
 app.get('/reportes.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'reportes.html')));
 
-app.listen(PORT, () => console.log(`SaaS Online en puerto ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`===========================================`);
+    console.log(`🚀 SERVIDOR "QUE NO SE VENZA" ACTIVO`);
+    console.log(`📱 Puerto detectado: ${PORT}`);
+    console.log(`===========================================`);
+});

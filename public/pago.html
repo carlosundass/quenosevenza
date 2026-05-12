@@ -11,9 +11,6 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="firebase-config.js"></script>
-    
-    <!-- SDK DE MERCADO PAGO -->
-    <script src="https://sdk.mercadopago.com/js/v2"></script>
 
     <style>
         :root { --primary: #4F46E5; --primary-hover: #4338CA; --bg-color: #F3F4F6; --card-bg: #FFFFFF; --text-main: #1F2937; --text-muted: #6B7280; --success: #10B981; --warning: #F59E0B; --danger: #EF4444; }
@@ -43,8 +40,6 @@
         .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
         .toast { background: white; border-radius: 12px; padding: 16px 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 12px; transform: translateX(120%); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); font-size: 14px; font-weight: 500;}
         .toast.show { transform: translateX(0); }
-        /* Oculta los elementos de desarrollador por defecto */
-        .cho-container { display: none; }
     </style>
 </head>
 <body>
@@ -79,10 +74,10 @@
                 </div>
                 <div class="ticket-row">
                     <span style="color:var(--text-muted);">Concepto:</span>
-                    <strong>Suscripción Mensual</strong>
+                    <strong>Suscripción Mensual Automática</strong>
                 </div>
                 <div class="ticket-total">
-                    <span>Total a Pagar:</span>
+                    <span>Monto a debitar:</span>
                     <span>$15.000 CLP</span>
                 </div>
             </div>
@@ -90,9 +85,8 @@
             <div id="mensajeEstadoPago"></div>
             
             <button id="btnRealizarPago" class="btn-submit btn-success" onclick="iniciarPagoMP()">
-                <span class="material-symbols-rounded">lock</span> Pago Seguro (Mercado Pago)
+                <span class="material-symbols-rounded">autorenew</span> Suscribirse (Mercado Pago)
             </button>
-            <div class="cho-container"></div>
             
             <button class="btn-cancel" onclick="volverAInicio()">Volver</button>
         </div>
@@ -108,11 +102,6 @@
             toast.style.borderLeft = `4px solid ${color}`; container.appendChild(toast);
             setTimeout(() => toast.classList.add('show'), 10); setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3500);
         }
-
-        // Inicializamos Mercado Pago con tu Llave Pública de Prueba
-        const mp = new MercadoPago('TEST-14622975-139f-43db-9d2b-cb2210a60b32', {
-            locale: 'es-CL'
-        });
 
         let clienteEncontrado = null; 
         let fueBuscadoPorCorreo = false; 
@@ -161,7 +150,6 @@
         function mostrarDetallePago() {
             document.getElementById('ticketNombre').innerText = clienteEncontrado.nombre;
             
-            // VERIFICACIÓN DE PAGO DOBLE
             const hoy = new Date(); hoy.setHours(0,0,0,0);
             const [y, m, d] = clienteEncontrado.fechaPago.split('-');
             const fechaPago = new Date(y, m - 1, d);
@@ -181,35 +169,34 @@
             document.getElementById('detallePagoView').style.display = 'block';
         }
 
-        // ESTA ES LA FUNCIÓN NUEVA QUE LLAMA AL SERVIDOR
         async function iniciarPagoMP() {
             const btn = document.getElementById('btnRealizarPago');
             btn.disabled = true;
             btn.innerHTML = `<span class="material-symbols-rounded">sync</span> Conectando a Mercado Pago...`;
 
             try {
-                // Le pedimos al servidor (server.js) que cree la orden de cobro
-                const response = await fetch('/create_preference', {
+                const response = await fetch('/create_subscription', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         idCliente: clienteEncontrado.id,
+                        correo: clienteEncontrado.correo,
                         nombreLocal: clienteEncontrado.nombre
                     })
                 });
 
-                const preference = await response.json();
+                const data = await response.json();
 
-                // Abrimos el Checkout flotante de Mercado Pago
-                mp.checkout({
-                    preference: { id: preference.id },
-                    autoOpen: true 
-                });
+                if (data.init_point) {
+                    window.location.href = data.init_point; // Redirige a la pasarela de suscripción
+                } else {
+                    throw new Error("No se recibió el link de suscripción");
+                }
 
             } catch (e) {
-                showToast("Error al iniciar el pago.", "error");
+                showToast("Error al iniciar la suscripción.", "error");
                 btn.disabled = false;
-                btn.innerHTML = `<span class="material-symbols-rounded">lock</span> Pago Seguro (Mercado Pago)`;
+                btn.innerHTML = `<span class="material-symbols-rounded">autorenew</span> Suscribirse (Mercado Pago)`;
             }
         }
 
@@ -219,7 +206,7 @@
         
         iniciarPortal();
         
-        // Anti curiosos visuales
+        // Bloqueo de herramientas de desarrollador
         document.addEventListener('contextmenu', event => event.preventDefault());
         document.onkeydown = function(e) {
             if(e.keyCode == 123) { return false; }
